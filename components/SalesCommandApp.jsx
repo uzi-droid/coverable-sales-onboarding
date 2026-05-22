@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { bootcampDays, initialState, objectionBank } from "@/lib/demoData";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -576,7 +576,7 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
 function CourseView({ state, currentRep, saveProgress }) {
   const [activeDayId, setActiveDayId] = useState("day1");
   const [homework, setHomework] = useState({});
-  const homeworkKey = `coverable-homework-${currentRep.id}-day1`;
+  const homeworkKey = `coverable-homework-${currentRep.id}-${activeDayId}`;
 
   useEffect(() => {
     const saved = window.localStorage.getItem(homeworkKey);
@@ -619,6 +619,13 @@ function CourseView({ state, currentRep, saveProgress }) {
           updateHomework={updateHomework}
           saveProgress={saveProgress}
         />
+      ) : activeDay.id === "day2" ? (
+        <DayTwoLesson
+          progress={state.progress[currentRep.id]?.day2 || 0}
+          homework={homework}
+          updateHomework={updateHomework}
+          saveProgress={saveProgress}
+        />
       ) : (
         <article className="card course-placeholder">
           <span className="eyebrow">{activeDay.title.split(":")[0]}</span>
@@ -631,6 +638,383 @@ function CourseView({ state, currentRep, saveProgress }) {
         </article>
       )}
     </div>
+  );
+}
+
+function DayTwoLesson({ progress, homework, updateHomework, saveProgress }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "Start",
+    "Gatekeeper",
+    "Language",
+    "Scripts",
+    "Rebuttals",
+    "Attorney",
+    "Qualify",
+    "Book",
+    "Confirm",
+    "Drills",
+    "Homework"
+  ];
+  const lastStep = steps.length - 1;
+
+  function goNext() {
+    const nextStep = Math.min(step + 1, lastStep);
+    setStep(nextStep);
+    saveProgress("day2", Math.max(progress, Math.round((nextStep / lastStep) * 75)));
+  }
+
+  function goBack() {
+    setStep(Math.max(step - 1, 0));
+  }
+
+  return (
+    <article className="card lesson-card">
+      <div className="lesson-hero">
+        <div>
+          <span className="eyebrow">Day 2</span>
+          <h3>Gatekeeper + Appointment Setting Training</h3>
+          <p>
+            By the end of Day 2, the rep should be able to get through gatekeepers, reach the
+            attorney or decision maker, create curiosity, qualify lightly, and book an appointment
+            without overexplaining.
+          </p>
+        </div>
+        <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
+      </div>
+
+      <div className="lesson-steps">
+        {steps.map((label, index) => (
+          <button
+            className={index === step ? "active" : ""}
+            key={label}
+            onClick={() => setStep(index)}
+            type="button"
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 ? (
+        <LessonPanel eyebrow="Orientation" title="The point of Day 2">
+          <p className="lesson-copy">
+            Day 2 is where the rep learns to earn access. The front desk is not a wall to smash
+            through. It is a filter. Your job is to sound relevant enough that the gatekeeper
+            understands why the attorney, office manager, or operations lead should hear the call.
+          </p>
+          <div className="agenda-list">
+            {[
+              ["30 min", "Gatekeeper psychology", "How assistants and intake staff think"],
+              ["45 min", "Gatekeeper scripts", "Transfer, callback, and office manager routes"],
+              ["45 min", "Gatekeeper rebuttal drills", "Busy, send info, and what is this regarding"],
+              ["45 min", "Appointment setting", "Attorney opener, qualification, and booking"],
+              ["30 min", "Calendar confirmation", "Confirming demos and avoiding no-shows"],
+              ["30 min", "Roleplay", "Gatekeeper and attorney booking simulations"],
+              ["30-60 min", "Homework", "Script memorization and written responses"]
+            ].map(([time, module, activity]) => (
+              <div className="agenda-item" key={module}>
+                <span>{time}</span>
+                <strong>{module}</strong>
+                <p>{activity}</p>
+              </div>
+            ))}
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <LessonPanel eyebrow="Module 1" title="Gatekeeper psychology">
+          <p className="lesson-copy">
+            Gatekeepers are not the enemy. They are protecting the attorney's time. They may be a
+            receptionist, secretary, intake coordinator, legal assistant, paralegal, office manager,
+            or executive assistant. Their main question is simple: is this worth interrupting the
+            attorney for?
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="They are listening for"
+              items={[
+                "A specific reason for the call.",
+                "A professional tone.",
+                "A clear connection to the firm's work.",
+                "Whether this belongs with an attorney, office manager, or operations person."
+              ]}
+            />
+            <InfoBlock
+              title="Your job"
+              items={[
+                "Sound relevant before asking for access.",
+                "Use legal workflow language, not hype.",
+                "Ask who owns the issue when you do not know.",
+                "Stay calm when they test you."
+              ]}
+            />
+          </div>
+          <HomeworkField
+            label="In one sentence, explain why the gatekeeper is not the enemy"
+            field="gatekeeperMindset"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 2 ? (
+        <LessonPanel eyebrow="Module 1" title="Language that gets blocked vs passed through">
+          <p className="lesson-copy">
+            Gatekeepers block vague sales energy. They pass along calls that sound specific,
+            business-relevant, and tied to a real workflow. Do not lead with AI. Lead with document
+            preparation, immigration case workflow, staff time, and the right decision maker.
+          </p>
+          <div className="compare-grid">
+            <InfoBlock
+              title="Avoid saying"
+              items={[
+                "I am trying to sell them software.",
+                "Can I speak to the owner?",
+                "Is the attorney available?",
+                "I just wanted to see if they would be interested.",
+                "Can you tell them it is about AI?",
+                "Sorry to bother you."
+              ]}
+            />
+            <InfoBlock
+              title="Say instead"
+              items={[
+                "I am reaching out regarding legal document preparation and case workflow for the firm.",
+                "It is regarding reducing repetitive drafting and case prep time for immigration matters.",
+                "I wanted to speak with the attorney who oversees immigration case operations.",
+                "Who would be the best person to speak with about improving document preparation workflow?"
+              ]}
+            />
+          </div>
+          <RewriteDrillDayTwo homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 3 ? (
+        <LessonPanel eyebrow="Module 2" title="Gatekeeper scripts">
+          <p className="lesson-copy">
+            The script should do three things quickly: identify you, anchor the topic in a serious
+            law firm workflow, and ask for the correct route. If you sound like you are fishing,
+            you will get pushed to email.
+          </p>
+          <ScriptLibrary
+            scripts={[
+              ["Main script", "Hi, this is [Name] with Coverable. I am reaching out regarding legal document preparation and immigration case workflow for the firm. Who would be the best attorney to speak with about that?"],
+              ["If they ask what Coverable is", "We help immigration law firms reduce repetitive drafting and case preparation work using legal AI. I just need to point this to the right attorney for a quick conversation."],
+              ["If they ask if this is sales", "It is a business call, but it is specifically about reducing attorney and paralegal time on case preparation. Who handles workflow or technology decisions for the firm?"],
+              ["Transfer route", "Could you connect me with the attorney who oversees immigration case workflow or firm operations?"],
+              ["If they ask for a name", "I may have the wrong contact listed. Is [Attorney Name] the attorney who handles immigration matters? If yes: Perfect, could you transfer me to them? If no: Got it. Who would be the correct attorney for immigration case operations?"],
+              ["When you know the attorney's name", "Hi, this is [Name] with Coverable. I am calling for [Attorney Name] regarding immigration case preparation and legal drafting workflow. Could you connect me?"],
+              ["If they ask if the attorney knows you", "Not yet. I am reaching out because we help immigration firms reduce repetitive case prep and drafting time. It should be a short conversation if it is relevant."]
+            ]}
+          />
+          <HomeworkField
+            label="Write the main gatekeeper script from memory"
+            field="mainGatekeeperFromMemory"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 4 ? (
+        <LessonPanel eyebrow="Module 2" title="Gatekeeper rebuttal drills">
+          <p className="lesson-copy">
+            A gatekeeper objection is usually a routing test. Do not collapse into "okay, what is
+            your email?" Ask one useful question, keep the topic specific, and move toward the
+            right person, callback time, or short note.
+          </p>
+          <GatekeeperRebuttalDrill homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Module 3" title="Appointment setting with the attorney">
+          <p className="lesson-copy">
+            Once the attorney or decision maker is reached, move quickly. The goal is not to explain
+            every feature. The goal is to state the reason, create relevance, ask one to three
+            qualifying questions, create curiosity, and book the appointment.
+          </p>
+          <div className="script-box compact-script">
+            <strong>Attorney cold call script</strong>
+            <br />
+            Hi [Attorney Name], this is [Name] with Coverable. I will be brief. We help immigration
+            law firms reduce the time their attorneys and paralegals spend on repetitive document
+            prep, briefs, motions, and case materials using legal AI. I wanted to see if it would be
+            worth showing you how it works for your firm.
+          </div>
+          <InfoBlock
+            title="Then pause. If they are neutral or positive, ask"
+            items={[
+              "Is your team currently doing most of the drafting and case prep manually, or do you already have software helping with that?",
+              "If manual: That is exactly where this tends to be useful. Would it be worth a quick 10-15 minute demo?",
+              "If they use software: A lot of firms already have case management software, but still do drafting, briefs, motions, and supporting materials manually. Is that still happening on your end?",
+              "Then book: I do not want to overexplain it on a random call. Are you better tomorrow morning or tomorrow afternoon?"
+            ]}
+          />
+          <HomeworkField
+            label="Write the attorney opener in your own words without making it longer"
+            field="attorneyOpener"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 6 ? (
+        <LessonPanel eyebrow="Module 3" title="Light qualification + curiosity">
+          <p className="lesson-copy">
+            Qualify lightly. Two to four questions is enough on the first call. If you interrogate
+            the attorney, they will feel trapped. If you ask nothing, the pitch feels generic.
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="Best initial questions"
+              items={[
+                "Does your firm handle a steady volume of immigration cases?",
+                "Are your paralegals doing most of the document prep manually right now?",
+                "What types of immigration matters do you handle most often?",
+                "Do briefs, motions, case packets, or supporting documents take up a lot of staff time?",
+                "Are you trying to increase case volume without adding more staff?",
+                "Do you already use any legal AI tools for drafting or case prep?",
+                "Who besides you would be involved in reviewing something like this?"
+              ]}
+            />
+            <InfoBlock
+              title="Curiosity lines"
+              items={[
+                "Firms are usually losing hours per case on work that can now be systemized.",
+                "Most firms do not realize how much profit they lose from manual prep time until they break it down per case.",
+                "If your staff is spending hours on repeatable documents, this can create immediate leverage.",
+                "This is not about replacing your team. It is about helping your team get through the repetitive work faster."
+              ]}
+            />
+          </div>
+          <HomeworkField
+            label="Pick two qualification questions and one curiosity line you would actually use"
+            field="qualificationPlan"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 7 ? (
+        <LessonPanel eyebrow="Module 3" title="Book the demo">
+          <p className="lesson-copy">
+            Do not try to win the whole sale during the cold call. The appointment is the win. The
+            booking ask should be direct, short, and framed around seeing the workflow instead of
+            listening to a long explanation.
+          </p>
+          <ScriptLibrary
+            scripts={[
+              ["20-second appointment pitch", "Coverable helps immigration firms cut down the hours spent on repetitive drafting and case preparation. If your paralegals are spending 5-10 hours building packets, briefs, motions, or supporting documents, we help reduce that workload so your team can move cases faster. I wanted to see if a short walkthrough would make sense."],
+              ["Direct booking", "The easiest next step is a quick walkthrough. It should only take 10-15 minutes, and you will know pretty quickly if it applies to your workflow. Are you better [Day/Time] or [Day/Time]?"],
+              ["Alternative booking", "Rather than explain the whole platform over the phone, let me show you what it does with immigration case prep. Do you have 15 minutes tomorrow or the next day?"],
+              ["Stronger booking", "If you are still preparing a lot of this manually, it is worth seeing. Let us put 15 minutes on the calendar and you can decide if it is relevant after seeing it."]
+            ]}
+          />
+          <HomeworkField
+            label="Write your preferred booking ask"
+            field="bookingAsk"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 8 ? (
+        <LessonPanel eyebrow="Module 3" title="Confirm the appointment and protect the show rate">
+          <p className="lesson-copy">
+            Booking is not finished until the invite is sent, the email is confirmed, and the
+            prospect knows what the walkthrough will cover. Clear confirmation reduces no-shows.
+          </p>
+          <div className="script-box compact-script">
+            <strong>After booking</strong>
+            <br />
+            Perfect. I have you down for [Day] at [Time]. I will send a calendar invite now. The
+            walkthrough will be focused on how Coverable helps reduce document prep, drafting, and
+            case material workload for immigration firms. Is [email] the best email?
+            <br />
+            <br />
+            Great. Please accept the invite when it comes through so I know it landed.
+          </div>
+          <ScriptLibrary
+            scripts={[
+              ["Confirmation email", "Subject: Coverable walkthrough confirmed for [Day]\n\nHi [Attorney Name],\n\nConfirmed for [Day] at [Time].\n\nOn the walkthrough, I will show how Coverable helps immigration law firms reduce repetitive document preparation, legal drafting, briefs, motions, and case material workload so attorneys and paralegals can move cases faster.\n\nLooking forward to speaking.\n\nBest,\n[Name]"],
+              ["No-show email", "Subject: Rescheduling Coverable walkthrough\n\nHi [Attorney Name],\n\nLooks like we missed each other for the Coverable walkthrough.\n\nNo problem - I know your schedule is busy. The reason I still think it is worth reconnecting is that Coverable may help reduce the time your team spends on repetitive immigration case prep, drafting, and supporting documents.\n\nAre you better later today or tomorrow to take a quick look?\n\nBest,\n[Name]"],
+              ["No-show text", "Hi [Attorney Name], this is [Name] with Coverable. Looks like we missed each other for the walkthrough. Are you better later today or tomorrow to take a quick look?"]
+            ]}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 9 ? (
+        <LessonPanel eyebrow="Practice" title="Roleplay drills + quiz">
+          <p className="lesson-copy">
+            Practice should feel slightly uncomfortable. The rep needs to hold control when the
+            gatekeeper blocks access and when the attorney gives a quick objection.
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="Gatekeeper transfer scenarios"
+              items={[
+                "Friendly receptionist.",
+                "Skeptical assistant.",
+                "Office manager blocker.",
+                "Send info gatekeeper.",
+                "Attorney is busy gatekeeper."
+              ]}
+            />
+            <InfoBlock
+              title="Attorney booking objections"
+              items={[
+                "I am busy.",
+                "Send me information.",
+                "We already have software.",
+                "Not interested.",
+                "I do not use AI."
+              ]}
+            />
+          </div>
+          <DayTwoQuiz homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 10 ? (
+        <LessonPanel eyebrow="Homework" title="Finish Day 2">
+          <p className="lesson-copy">
+            Passing standard: the rep should score 80% or higher on the quiz, memorize the main
+            gatekeeper script, memorize the attorney appointment-setting script, and prepare for
+            live objection drills on Day 3.
+          </p>
+          <div className="homework-grid">
+            <HomeworkField label="Rebuttal for: Send information" field="rebuttalSendInfo" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Rebuttal for: They're busy" field="rebuttalBusy" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Rebuttal for: Not interested" field="rebuttalNotInterested" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Rebuttal for: We already have software" field="rebuttalSoftware" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Link or note for recorded gatekeeper roleplay" field="gatekeeperRecording" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Link or note for recorded attorney booking roleplay" field="attorneyRecording" homework={homework} updateHomework={updateHomework} />
+          </div>
+          <button className="button" type="button" onClick={() => saveProgress("day2", 100)}>
+            Mark Day 2 Complete
+          </button>
+        </LessonPanel>
+      ) : null}
+
+      <div className="lesson-controls">
+        <button className="ghost" type="button" onClick={goBack} disabled={step === 0}>
+          Back
+        </button>
+        <button className="button" type="button" onClick={goNext} disabled={step === lastStep}>
+          Next
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -1039,6 +1423,152 @@ function ScriptPractice({ homework, updateHomework }) {
         <HomeworkField label="Your 10-second version" field="tenSecond" homework={homework} updateHomework={updateHomework} />
         <HomeworkField label="Your pain-based version" field="painBased" homework={homework} updateHomework={updateHomework} />
       </div>
+    </div>
+  );
+}
+
+function ScriptLibrary({ scripts }) {
+  return (
+    <div className="script-practice">
+      {scripts.map(([label, text]) => (
+        <div className="script-box compact-script" key={label}>
+          <strong>{label}</strong>
+          <br />
+          {text.split("\n").map((line, index) => (
+            <Fragment key={`${label}-${index}`}>
+              {line}
+              {index < text.split("\n").length - 1 ? <br /> : null}
+            </Fragment>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RewriteDrillDayTwo({ homework, updateHomework }) {
+  return (
+    <div className="drill-stack">
+      <div className="compare-grid">
+        <div className="compare-card bad">
+          <strong>Blocked</strong>
+          <p>Can I speak to the owner? I wanted to tell them about our AI software.</p>
+        </div>
+        <div className="compare-card good">
+          <strong>Passed through</strong>
+          <p>
+            I am reaching out regarding legal document preparation and immigration case workflow.
+            Who would be the best attorney to speak with about that?
+          </p>
+        </div>
+      </div>
+      <HomeworkField
+        label="Rewrite the blocked version so it sounds professional and specific"
+        field="gatekeeperRewrite"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function GatekeeperRebuttalDrill({ homework, updateHomework }) {
+  const [active, setActive] = useState("sendInfo");
+  const rebuttals = {
+    regarding: {
+      label: "What is this regarding?",
+      strong:
+        "It is regarding how the firm is handling repetitive immigration document preparation, briefs, motions, and supporting case materials. Coverable helps reduce the staff time that goes into that work. Would [Attorney Name] be the right person for that?",
+      field: "drillRegarding"
+    },
+    sendInfo: {
+      label: "Send me information",
+      strong:
+        "I can send something over, but I do not want to send generic information to the wrong person. Is [Attorney Name] the one who reviews tools that affect paralegal workload and case preparation? Great. I will send a short overview, but it will make more sense with a 10-minute walkthrough. What does their calendar usually look like later this week?",
+      field: "drillSendInfo"
+    },
+    busy: {
+      label: "They're busy",
+      strong:
+        "I figured they would be. I do not need them right this second. Is there a better time today to catch them for a quick conversation about reducing case prep workload? If not, what is the best way to get a short note in front of them - direct email, office email, or callback time?",
+      field: "drillBusy"
+    },
+    officeManager: {
+      label: "Talk to the office manager",
+      strong:
+        "That works. Is the office manager involved in decisions around legal software and paralegal workflow, or do they usually bring the attorney in for that? I can start with the office manager, but I will likely need the attorney involved if it affects legal drafting and case prep.",
+      field: "drillOfficeManager"
+    },
+    refuse: {
+      label: "Refuses transfer",
+      strong:
+        "Understood. Before I send anything over, can I ask one quick question so I point this correctly - does the firm handle a high volume of immigration matters, or is immigration only a small part of the practice? This is most relevant when the team is spending real time on repetitive case packets, briefs, motions, and supporting documents.",
+      field: "drillRefuse"
+    },
+    callback: {
+      label: "Callback message",
+      strong:
+        "Please let [Attorney Name] know [Your Name] from Coverable called regarding reducing repetitive immigration case prep and legal drafting workload. I will also send a short note over. Best callback is [Phone Number]. Curiosity version: I called because we are helping immigration firms cut down the time spent preparing case documents, briefs, and supporting materials. It is easier to explain in 5-10 minutes.",
+      field: "drillCallback"
+    }
+  };
+  const current = rebuttals[active];
+
+  return (
+    <div className="drill-stack">
+      <div className="segmented-buttons">
+        {Object.entries(rebuttals).map(([key, item]) => (
+          <button
+            className={active === key ? "active" : ""}
+            key={key}
+            onClick={() => setActive(key)}
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="script-box compact-script">
+        <strong>Strong response</strong>
+        <br />
+        {current.strong}
+      </div>
+      <HomeworkField
+        label={`Write your response to: ${current.label}`}
+        field={current.field}
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function DayTwoQuiz({ homework, updateHomework }) {
+  const questions = [
+    "What is the goal of a gatekeeper call?",
+    "Why should reps avoid saying \"I am selling software\"?",
+    "What should the rep say when asked \"What is this regarding?\"",
+    "How should the rep handle \"send me information\"?",
+    "What is the goal of the attorney cold call?",
+    "Name three qualification questions.",
+    "Why should reps avoid overexplaining before the demo?",
+    "Give one strong curiosity line.",
+    "What should the rep do after booking an appointment?",
+    "What should the rep say after a no-show?"
+  ];
+
+  return (
+    <div className="quiz-stack">
+      <span className="eyebrow">Quiz - passing score 80%</span>
+      {questions.map((question, index) => (
+        <HomeworkField
+          field={`day2Quiz${index}`}
+          homework={homework}
+          key={question}
+          label={question}
+          updateHomework={updateHomework}
+        />
+      ))}
     </div>
   );
 }

@@ -447,7 +447,7 @@ textarea {
 
 .lesson-steps {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 8px;
 }
 
@@ -559,9 +559,32 @@ textarea {
 }
 
 .drill-stack,
-.script-practice {
+.script-practice,
+.quiz-stack {
   display: grid;
   gap: 12px;
+}
+
+.segmented-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segmented-buttons button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.segmented-buttons button.active {
+  color: #ffffff;
+  background: #111315;
 }
 
 .drill-card {
