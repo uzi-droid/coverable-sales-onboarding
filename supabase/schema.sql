@@ -28,6 +28,9 @@ create table if not exists public.crm_activities (
   channel text not null,
   outcome text not null,
   objection text,
+  sale_amount numeric(12, 2) not null default 0,
+  contract_term text,
+  close_date date,
   notes text not null,
   next_follow_up date,
   created_at timestamptz not null default now()

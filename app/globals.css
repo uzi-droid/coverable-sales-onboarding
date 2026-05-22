@@ -1037,6 +1037,12 @@ textarea {
   align-items: end;
 }
 
+.crm-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .crm-form .wide {
   grid-column: span 4;
 }
@@ -1053,7 +1059,7 @@ textarea {
 
 table {
   width: 100%;
-  min-width: 900px;
+  min-width: 1180px;
   border-collapse: collapse;
 }
 
@@ -1066,13 +1072,26 @@ td {
 }
 
 th {
+  position: sticky;
+  top: 0;
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
+  background: rgba(247, 248, 249, 0.96);
+  z-index: 1;
 }
 
 tr:last-child td {
   border-bottom: 0;
+}
+
+tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.money-cell {
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .status {
@@ -1263,6 +1282,7 @@ tr:last-child td {
   .grid.two,
   .grid.four,
   .home-grid,
+  .crm-summary-grid,
   .day-grid,
   .lesson-steps,
   .lesson-grid,
@@ -1301,6 +1321,7 @@ tr:last-child td {
   }
 
   .nav,
+  .crm-summary-grid,
   .crm-form {
     grid-template-columns: 1fr;
   }

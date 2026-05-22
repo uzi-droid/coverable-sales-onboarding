@@ -114,7 +114,7 @@ export default function SalesCommandApp() {
           supabase.from("onboarding_progress").select("user_id, module_id, percent_complete"),
           supabase
             .from("crm_activities")
-            .select("id, user_id, firm_name, contact_name, contact_role, channel, outcome, objection, notes, next_follow_up, created_at")
+            .select("*")
             .order("created_at", { ascending: false })
         ]),
         "Workspace data took too long to load"
@@ -165,6 +165,9 @@ export default function SalesCommandApp() {
           outcome: row.outcome,
           channel: row.channel,
           objection: row.objection || "",
+          saleAmount: Number(row.sale_amount || 0),
+          contractTerm: row.contract_term || "",
+          closeDate: row.close_date || "",
           notes: row.notes,
           nextFollowUp: row.next_follow_up || "",
           createdAt: row.created_at?.slice(0, 10) || ""
@@ -235,7 +238,7 @@ export default function SalesCommandApp() {
     }
 
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.from("crm_activities").insert({
+    const payload = {
       user_id: session.user.id,
       firm_name: entry.firm,
       contact_name: entry.contact,
@@ -243,9 +246,23 @@ export default function SalesCommandApp() {
       outcome: entry.outcome,
       channel: entry.channel,
       objection: entry.objection || null,
+      sale_amount: entry.saleAmount || 0,
+      contract_term: entry.contractTerm || null,
+      close_date: entry.closeDate || null,
       next_follow_up: entry.nextFollowUp || null,
       notes: entry.notes
-    });
+    };
+
+    let { error } = await supabase.from("crm_activities").insert(payload);
+
+    if (error && isMissingCrmSalesFields(error)) {
+      const { sale_amount, contract_term, close_date, ...fallbackPayload } = payload;
+      const fallback = await supabase.from("crm_activities").insert(fallbackPayload);
+      error = fallback.error;
+      if (!error) {
+        setNotice("CRM saved. Run the sales-fields SQL in Supabase so sale prices sync to the leaderboard.");
+      }
+    }
 
     if (error) {
       setNotice(error.message);
@@ -452,7 +469,7 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
           <span className="eyebrow">My Score</span>
           <strong>{currentStats.score}</strong>
           <div className="small">
-            {currentStats.onboarding}% course / {currentStats.demos} demos / {currentStats.closed} closed
+            {currentStats.onboarding}% course / {currentStats.demos} demos / {currentStats.closed} closed / {formatMoney(currentStats.revenue)}
           </div>
         </article>
       </div>
@@ -477,6 +494,7 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
                 <span>{rep.onboarding}%</span>
                 <span>{rep.demos} demos</span>
                 <span>{rep.closed} closed</span>
+                <span>{formatMoney(rep.revenue)}</span>
               </div>
             </div>
           ))
@@ -496,10 +514,12 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
 
 function CrmView({ state, currentRep, saveCrmEntry }) {
   const entries = state.crm.filter((entry) => entry.repId === currentRep.id);
+  const stats = getRepStats(state, currentRep.id);
 
   function handleSubmit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const saleAmount = Number(form.get("saleAmount") || 0);
     const entry = {
       id: crypto.randomUUID(),
       repId: currentRep.id,
@@ -509,6 +529,9 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
       outcome: form.get("outcome"),
       channel: form.get("channel"),
       objection: form.get("objection").trim(),
+      saleAmount: Number.isFinite(saleAmount) ? saleAmount : 0,
+      contractTerm: form.get("contractTerm").trim(),
+      closeDate: form.get("closeDate"),
       nextFollowUp: form.get("nextFollowUp"),
       notes: form.get("notes").trim(),
       createdAt: new Date().toISOString().slice(0, 10)
@@ -519,8 +542,15 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
 
   return (
     <>
+      <div className="crm-summary-grid">
+        <Metric label="Calls" value={stats.calls} detail="All logged touches" />
+        <Metric label="Demos" value={stats.demos} detail="Booked walkthroughs" />
+        <Metric label="Closed" value={stats.closed} detail="Won sales" />
+        <Metric label="Revenue" value={formatMoney(stats.revenue)} detail="Closed sale value" />
+      </div>
+
       <article className="card">
-        <h4>Log Sales Activity</h4>
+        <h4>Sales Spreadsheet</h4>
         <form className="crm-form" onSubmit={handleSubmit}>
           <Field label="Firm">
             <input name="firm" required placeholder="Immigration firm" />
@@ -559,11 +589,26 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
           <Field label="Objection">
             <input name="objection" placeholder="Busy, cost, AI concern..." />
           </Field>
+          <Field label="Sale amount">
+            <input name="saleAmount" min="0" placeholder="0" step="0.01" type="number" />
+          </Field>
+          <Field label="Contract term">
+            <select name="contractTerm">
+              <option value="">None</option>
+              <option>Monthly</option>
+              <option>Quarterly</option>
+              <option>Annual</option>
+              <option>Pilot</option>
+            </select>
+          </Field>
+          <Field label="Close date">
+            <input name="closeDate" type="date" />
+          </Field>
           <Field label="Next follow-up">
             <input name="nextFollowUp" type="date" />
           </Field>
           <button className="button" type="submit">
-            Log Activity
+            Add Row
           </button>
           <Field label="Notes" wide>
             <textarea name="notes" required placeholder="Pain, next step, workflow details" />
@@ -3425,6 +3470,9 @@ function CrmTable({ state, entries }) {
             <th>Contact</th>
             <th>Outcome</th>
             <th>Channel</th>
+            <th>Sale</th>
+            <th>Term</th>
+            <th>Close</th>
             <th>Next</th>
             <th>Notes</th>
           </tr>
@@ -3445,6 +3493,9 @@ function CrmTable({ state, entries }) {
                   <span className="status">{entry.outcome}</span>
                 </td>
                 <td>{entry.channel}</td>
+                <td className="money-cell">{entry.saleAmount ? formatMoney(entry.saleAmount) : "-"}</td>
+                <td>{entry.contractTerm || "-"}</td>
+                <td>{entry.closeDate || "-"}</td>
                 <td>{entry.nextFollowUp || "None"}</td>
                 <td>
                   {entry.notes}
@@ -3542,12 +3593,13 @@ function getRepStats(state, repId) {
   const closed = entries.filter((entry) => entry.outcome === "Closed").length;
   const followUps = entries.filter((entry) => entry.outcome === "Follow-up").length;
   const attorneyReached = entries.filter((entry) => entry.outcome === "Attorney Reached").length;
-  const score = calls * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 70 + onboarding;
-  return { calls, demos, closed, followUps, onboarding, score };
+  const revenue = entries.reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
+  const score = calls * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 100 + Math.round(revenue / 100) + onboarding;
+  return { calls, demos, closed, followUps, onboarding, revenue, score };
 }
 
 function getEmptyStats() {
-  return { calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, score: 0 };
+  return { calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, revenue: 0, score: 0 };
 }
 
 function rankReps(state) {
@@ -3563,6 +3615,14 @@ function initialsFor(value) {
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join("");
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
 }
 
 function profileFromUser(user) {
@@ -3597,6 +3657,16 @@ function safeParseJson(value) {
 function isMissingCourseAnswersTable(error) {
   const message = error?.message || "";
   return error?.code === "42P01" || error?.code === "PGRST205" || message.includes("course_answers");
+}
+
+function isMissingCrmSalesFields(error) {
+  const message = error?.message || "";
+  return (
+    error?.code === "PGRST204" ||
+    message.includes("sale_amount") ||
+    message.includes("contract_term") ||
+    message.includes("close_date")
+  );
 }
 
 function viewTitle(view) {
