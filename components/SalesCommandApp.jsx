@@ -641,7 +641,10 @@ function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
     "Standards",
     "Reality",
     "Explain",
-    "Practice",
+    "Attorney",
+    "Control",
+    "Scripts",
+    "Check",
     "Homework"
   ];
   const lastStep = steps.length - 1;
@@ -818,6 +821,59 @@ function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
       ) : null}
 
       {step === 4 ? (
+        <LessonPanel eyebrow="Module 3" title="How attorneys think">
+          <p className="lesson-copy">
+            Attorneys are busy, skeptical, and protective of their time. They are trained to
+            question claims. Your job is to answer the concern underneath the words they say.
+          </p>
+          <MindsetDrill
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Module 4" title="Sales control">
+          <p className="lesson-copy">
+            Control does not mean being aggressive. It means having a clear reason, asking focused
+            questions, and moving the conversation toward a next step without overexplaining.
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="5 Rules"
+              items={[
+                "Lead with a clear reason for the call.",
+                "Ask focused questions.",
+                "Do not overexplain.",
+                "Handle objections with confidence.",
+                "Always move toward a next step."
+              ]}
+            />
+            <InfoBlock
+              title="Correct posture"
+              items={[
+                "I have something relevant that may help your firm.",
+                "I only need a short conversation to see if it makes sense.",
+                "I am not begging for time."
+              ]}
+            />
+          </div>
+          <RewriteDrill homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 6 ? (
+        <LessonPanel eyebrow="Script practice" title="Build the muscle">
+          <p className="lesson-copy">
+            Read these out loud. Then write your own version. The goal is not to sound like a
+            robot. The goal is to be short, clear, and business-focused.
+          </p>
+          <ScriptPractice homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 7 ? (
         <LessonPanel eyebrow="Practice" title="Good pitch vs bad pitch">
           <div className="compare-grid">
             <div className="compare-card bad">
@@ -853,7 +909,7 @@ function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
         </LessonPanel>
       ) : null}
 
-      {step === 5 ? (
+      {step === 8 ? (
         <LessonPanel eyebrow="Homework" title="Finish Day 1">
           <div className="homework-grid">
             <HomeworkField label="Coverable's value in one sentence" field="oneSentence" homework={homework} updateHomework={updateHomework} />
@@ -905,6 +961,84 @@ function ChecklistInteraction({ items }) {
           <span>{item}</span>
         </label>
       ))}
+    </div>
+  );
+}
+
+function MindsetDrill({ homework, updateHomework }) {
+  const prompts = [
+    ["Is this worth my time?", "Lead with a specific workflow pain, not a vague AI claim."],
+    ["Is this relevant to my practice?", "Say immigration case prep, drafting, briefs, motions, and packets."],
+    ["Will this create risk?", "Clarify that attorneys still review and control the final work."],
+    ["Will this save staff time?", "Tie the value to paralegal workload and hours saved per case."]
+  ];
+
+  return (
+    <div className="drill-stack">
+      {prompts.map(([thought, response]) => (
+        <div className="drill-card" key={thought}>
+          <span>Attorney is thinking</span>
+          <strong>{thought}</strong>
+          <p>{response}</p>
+        </div>
+      ))}
+      <HomeworkField
+        label="Pick one attorney concern and write how you would answer it"
+        field="attorneyConcern"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function RewriteDrill({ homework, updateHomework }) {
+  return (
+    <div className="drill-stack">
+      <div className="compare-grid">
+        <div className="compare-card bad">
+          <strong>Weak</strong>
+          <p>Sorry to bother you. I was just checking if maybe you had time to hear about our AI platform.</p>
+        </div>
+        <div className="compare-card good">
+          <strong>Controlled</strong>
+          <p>
+            I will be brief. We help immigration firms reduce repetitive case prep and drafting
+            workload. Is your team still preparing most packets manually?
+          </p>
+        </div>
+      </div>
+      <HomeworkField
+        label="Rewrite this weak opener in your own words"
+        field="controlledOpener"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function ScriptPractice({ homework, updateHomework }) {
+  const scripts = [
+    ["10-second", "Coverable helps immigration law firms prepare documents and case materials faster using AI, so attorneys and paralegals spend less time on repetitive work."],
+    ["20-second", "Coverable is legal AI software for law firms, especially immigration firms. It helps generate and organize documents, briefs, motions, and case materials faster, which saves paralegal time, reduces attorney workload, and helps the firm handle more cases with the same staff."],
+    ["Pain-based", "Most immigration firms have staff spending hours on repeatable drafting, forms, briefs, and case packets. Coverable helps reduce that manual workload so the firm can move cases faster without immediately adding payroll."],
+    ["ROI-based", "If your team saves even a few hours per case, that adds up quickly. Coverable is about reducing labor hours per case and increasing how many cases the firm can handle with the same team."]
+  ];
+
+  return (
+    <div className="script-practice">
+      {scripts.map(([label, text]) => (
+        <div className="script-box compact-script" key={label}>
+          <strong>{label}</strong>
+          <br />
+          {text}
+        </div>
+      ))}
+      <div className="homework-grid">
+        <HomeworkField label="Your 10-second version" field="tenSecond" homework={homework} updateHomework={updateHomework} />
+        <HomeworkField label="Your pain-based version" field="painBased" homework={homework} updateHomework={updateHomework} />
+      </div>
     </div>
   );
 }

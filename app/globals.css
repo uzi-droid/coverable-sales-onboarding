@@ -447,7 +447,7 @@ textarea {
 
 .lesson-steps {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -462,6 +462,7 @@ textarea {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.45);
   font-weight: 800;
+  font-size: 13px;
 }
 
 .lesson-steps button.active {
@@ -555,6 +556,34 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.drill-stack,
+.script-practice {
+  display: grid;
+  gap: 12px;
+}
+
+.drill-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.drill-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.drill-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .script-builder label {
