@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { bootcampDays, initialState, objectionBank } from "@/lib/demoData";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "coverable-sales-command-next-v1";
 
@@ -10,7 +10,7 @@ function cloneInitialState() {
   return JSON.parse(JSON.stringify(initialState));
 }
 
-function loadState() {
+function loadDemoState() {
   if (typeof window === "undefined") return cloneInitialState();
   const saved = window.localStorage.getItem(STORAGE_KEY);
   if (!saved) return cloneInitialState();
@@ -21,33 +21,196 @@ function loadState() {
   }
 }
 
-function saveState(nextState) {
+function saveDemoState(nextState) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
 }
 
 export default function SalesCommandApp() {
+  const configured = isSupabaseConfigured();
   const [state, setState] = useState(cloneInitialState);
   const [mounted, setMounted] = useState(false);
-  const configured = isSupabaseConfigured();
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(configured);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    setState(loadState());
-    setMounted(true);
-  }, []);
+    if (!configured) {
+      setState(loadDemoState());
+      setMounted(true);
+      setLoading(false);
+      return;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+
+    async function boot() {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) setNotice(error.message);
+      setSession(data.session);
+      if (data.session) await loadLiveState(supabase, data.session.user.id);
+      setMounted(true);
+      setLoading(false);
+    }
+
+    boot();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) await loadLiveState(supabase, nextSession.user.id);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [configured]);
+
+  async function loadLiveState(supabase, currentUserId) {
+    setNotice("");
+
+    const [{ data: profiles, error: profileError }, { data: progress, error: progressError }, { data: crm, error: crmError }] =
+      await Promise.all([
+        supabase.from("profiles").select("id, full_name, email, start_date").order("created_at", { ascending: true }),
+        supabase.from("onboarding_progress").select("user_id, module_id, percent_complete"),
+        supabase
+          .from("crm_activities")
+          .select("id, user_id, firm_name, contact_name, contact_role, channel, outcome, objection, notes, next_follow_up, created_at")
+          .order("created_at", { ascending: false })
+      ]);
+
+    const firstError = profileError || progressError || crmError;
+    if (firstError) {
+      setNotice(firstError.message);
+      return;
+    }
+
+    const reps = (profiles || []).map((profile) => ({
+      id: profile.id,
+      name: profile.full_name,
+      email: profile.email,
+      initials: initialsFor(profile.full_name || profile.email),
+      startDate: profile.start_date
+    }));
+
+    const progressByRep = {};
+    reps.forEach((rep) => {
+      progressByRep[rep.id] = Object.fromEntries(bootcampDays.map((day) => [day.id, 0]));
+    });
+    (progress || []).forEach((row) => {
+      progressByRep[row.user_id] = progressByRep[row.user_id] || {};
+      progressByRep[row.user_id][row.module_id] = row.percent_complete;
+    });
+
+    setState((current) => ({
+      ...current,
+      currentRepId: currentUserId,
+      reps,
+      progress: progressByRep,
+      crm: (crm || []).map((row) => ({
+        id: row.id,
+        repId: row.user_id,
+        firm: row.firm_name,
+        contact: row.contact_name,
+        contactRole: row.contact_role,
+        outcome: row.outcome,
+        channel: row.channel,
+        objection: row.objection || "",
+        notes: row.notes,
+        nextFollowUp: row.next_follow_up || "",
+        createdAt: row.created_at?.slice(0, 10) || ""
+      }))
+    }));
+  }
 
   function updateState(updater) {
     setState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      saveState(next);
+      if (!configured) saveDemoState(next);
       return next;
     });
   }
 
-  const currentRep = state.reps.find((rep) => rep.id === state.currentRepId) || state.reps[0];
-  const rankedReps = useMemo(() => rankReps(state), [state]);
-  const currentStats = getRepStats(state, currentRep.id);
+  async function saveCrmEntry(entry, form) {
+    if (!configured || !session) {
+      updateState((draft) => ({ ...draft, crm: [entry, ...draft.crm] }));
+      form.reset();
+      return;
+    }
 
-  if (!mounted) return null;
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.from("crm_activities").insert({
+      user_id: session.user.id,
+      firm_name: entry.firm,
+      contact_name: entry.contact,
+      contact_role: entry.contactRole,
+      outcome: entry.outcome,
+      channel: entry.channel,
+      objection: entry.objection || null,
+      next_follow_up: entry.nextFollowUp || null,
+      notes: entry.notes
+    });
+
+    if (error) {
+      setNotice(error.message);
+      return;
+    }
+
+    form.reset();
+    await loadLiveState(supabase, session.user.id);
+  }
+
+  async function saveProgress(moduleId, amount) {
+    const repId = currentRep?.id;
+    if (!repId) return;
+
+    if (!configured || !session) {
+      updateState((draft) => ({
+        ...draft,
+        progress: {
+          ...draft.progress,
+          [repId]: {
+            ...draft.progress[repId],
+            [moduleId]: amount
+          }
+        }
+      }));
+      return;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.from("onboarding_progress").upsert(
+      {
+        user_id: session.user.id,
+        module_id: moduleId,
+        percent_complete: amount,
+        completed_at: amount === 100 ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "user_id,module_id" }
+    );
+
+    if (error) {
+      setNotice(error.message);
+      return;
+    }
+
+    await loadLiveState(supabase, session.user.id);
+  }
+
+  async function signOut() {
+    const supabase = createBrowserSupabaseClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  const liveMode = configured && Boolean(session);
+  const currentRep =
+    state.reps.find((rep) => rep.id === (liveMode ? session.user.id : state.currentRepId)) || state.reps[0];
+  const rankedReps = useMemo(() => rankReps(state), [state]);
+  const currentStats = currentRep ? getRepStats(state, currentRep.id) : getEmptyStats();
+
+  if (!mounted || loading) return <LoadingShell />;
+
+  if (configured && !session) return <LoginRequired />;
 
   return (
     <div className="shell">
@@ -60,22 +223,28 @@ export default function SalesCommandApp() {
           </div>
         </div>
 
-        <div className="account-switcher">
-          <label htmlFor="rep">Demo rep</label>
-          <select
-            id="rep"
-            value={currentRep.id}
-            onChange={(event) =>
-              updateState((draft) => ({ ...draft, currentRepId: event.target.value }))
-            }
-          >
-            {state.reps.map((rep) => (
-              <option key={rep.id} value={rep.id}>
-                {rep.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {liveMode ? (
+          <div className="sidebar-note compact-note">
+            Signed in as <strong>{currentRep?.name || session.user.email}</strong>
+          </div>
+        ) : (
+          <div className="account-switcher">
+            <label htmlFor="rep">Demo rep</label>
+            <select
+              id="rep"
+              value={currentRep.id}
+              onChange={(event) =>
+                updateState((draft) => ({ ...draft, currentRepId: event.target.value }))
+              }
+            >
+              {state.reps.map((rep) => (
+                <option key={rep.id} value={rep.id}>
+                  {rep.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <nav className="nav">
           {[
@@ -96,44 +265,50 @@ export default function SalesCommandApp() {
         </nav>
 
         <div className="sidebar-note">
-          {configured
-            ? "Supabase is configured. Next step is wiring live reads and writes."
-            : "Demo mode is active until the free Supabase project keys are added."}
+          {liveMode
+            ? "Live Supabase mode: CRM activity and onboarding progress are stored online."
+            : "Demo mode is active until Supabase env vars are added."}
         </div>
       </aside>
 
       <main className="main">
         <section className="topbar">
           <div>
-            <div className="eyebrow">Rep mode / {currentRep.name}</div>
+            <div className="eyebrow">{liveMode ? "Live rep mode" : "Demo mode"} / {currentRep?.name}</div>
             <h2>{viewTitle(state.activeView)}</h2>
             <p>{viewSubtitle(state.activeView)}</p>
           </div>
           <div className="quick-actions">
-            <a className="ghost" href="/login">
-              Login
-            </a>
             <button className="ghost" onClick={() => updateState((draft) => ({ ...draft, activeView: "crm" }))}>
               Log Activity
             </button>
-            <button
-              className="danger"
-              onClick={() => updateState(cloneInitialState())}
-              type="button"
-            >
-              Reset Demo
-            </button>
+            {liveMode ? (
+              <button className="danger" onClick={signOut} type="button">
+                Sign Out
+              </button>
+            ) : (
+              <>
+                <a className="ghost" href="/login">
+                  Login
+                </a>
+                <button className="danger" onClick={() => updateState(cloneInitialState())} type="button">
+                  Reset Demo
+                </button>
+              </>
+            )}
           </div>
         </section>
+
+        {notice ? <div className="notice">{notice}</div> : null}
 
         {state.activeView === "team" ? (
           <TeamView state={state} rankedReps={rankedReps} currentStats={currentStats} />
         ) : null}
         {state.activeView === "crm" ? (
-          <CrmView state={state} currentRep={currentRep} updateState={updateState} />
+          <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
         ) : null}
         {state.activeView === "course" ? (
-          <CourseView state={state} currentRep={currentRep} updateState={updateState} />
+          <CourseView state={state} currentRep={currentRep} saveProgress={saveProgress} />
         ) : null}
         {state.activeView === "coach" ? <CoachView /> : null}
       </main>
@@ -159,21 +334,25 @@ function TeamView({ state, rankedReps, currentStats }) {
       <div className="grid two">
         <article className="card">
           <h4>Rep Progress</h4>
-          {rankedReps.map((rep, index) => (
-            <div className="leader-row" key={rep.id}>
-              <div className="rank">{index + 1}</div>
-              <div>
-                <div className="rep-name">{rep.name}</div>
-                <div className="small">
-                  {rep.onboarding}% course, {rep.calls} CRM records, {rep.demos} demos
+          {rankedReps.length ? (
+            rankedReps.map((rep, index) => (
+              <div className="leader-row" key={rep.id}>
+                <div className="rank">{index + 1}</div>
+                <div>
+                  <div className="rep-name">{rep.name}</div>
+                  <div className="small">
+                    {rep.onboarding}% course, {rep.calls} CRM records, {rep.demos} demos
+                  </div>
+                  <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
+                    <div className="progress-fill" />
+                  </div>
                 </div>
-                <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
-                  <div className="progress-fill" />
-                </div>
+                <div className="score">{rep.score}</div>
               </div>
-              <div className="score">{rep.score}</div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <div className="empty">No reps yet. Create an account to start the board.</div>
+          )}
         </article>
 
         <article className="card">
@@ -182,7 +361,7 @@ function TeamView({ state, rankedReps, currentStats }) {
             <li>Course progress comes from completed onboarding modules.</li>
             <li>Sales stats come from CRM activity logged by each rep.</li>
             <li>Demos, follow-ups, and closed clients earn more points than raw calls.</li>
-            <li>Later, admin can review the same data with coaching notes.</li>
+            <li>Everyone sees the scoreboard, so activity turns into momentum.</li>
           </ul>
           <div className="script-box">
             First milestone: reps can log in, log activity, and see where they stand against the
@@ -200,7 +379,7 @@ function TeamView({ state, rankedReps, currentStats }) {
   );
 }
 
-function CrmView({ state, currentRep, updateState }) {
+function CrmView({ state, currentRep, saveCrmEntry }) {
   const entries = state.crm.filter((entry) => entry.repId === currentRep.id);
 
   function handleSubmit(event) {
@@ -220,8 +399,7 @@ function CrmView({ state, currentRep, updateState }) {
       createdAt: new Date().toISOString().slice(0, 10)
     };
 
-    updateState((draft) => ({ ...draft, crm: [entry, ...draft.crm] }));
-    event.currentTarget.reset();
+    saveCrmEntry(entry, event.currentTarget);
   }
 
   return (
@@ -287,7 +465,7 @@ function CrmView({ state, currentRep, updateState }) {
   );
 }
 
-function CourseView({ state, currentRep, updateState }) {
+function CourseView({ state, currentRep, saveProgress }) {
   return (
     <div className="grid two">
       {bootcampDays.map((day) => {
@@ -310,18 +488,7 @@ function CourseView({ state, currentRep, updateState }) {
                   className="ghost"
                   key={amount}
                   type="button"
-                  onClick={() =>
-                    updateState((draft) => ({
-                      ...draft,
-                      progress: {
-                        ...draft.progress,
-                        [currentRep.id]: {
-                          ...draft.progress[currentRep.id],
-                          [day.id]: amount
-                        }
-                      }
-                    }))
-                  }
+                  onClick={() => saveProgress(day.id, amount)}
                 >
                   {amount}%
                 </button>
@@ -427,10 +594,55 @@ function Field({ label, children, wide }) {
   );
 }
 
+function LoadingShell() {
+  return (
+    <main className="login-page">
+      <section className="login-panel">
+        <div className="brand compact">
+          <div className="mark">C</div>
+          <div>
+            <h1>Coverable Command</h1>
+            <span>Loading sales floor</span>
+          </div>
+        </div>
+        <div className="notice">Loading your workspace...</div>
+      </section>
+    </main>
+  );
+}
+
+function LoginRequired() {
+  return (
+    <main className="login-page">
+      <section className="login-panel">
+        <div className="brand compact">
+          <div className="mark">C</div>
+          <div>
+            <h1>Coverable Command</h1>
+            <span>Rep sales cockpit</span>
+          </div>
+        </div>
+        <div className="login-form">
+          <div>
+            <div className="eyebrow">Online mode</div>
+            <h2>Sign in to continue</h2>
+            <p>Sales activity, onboarding progress, and team competition now save to Supabase.</p>
+          </div>
+          <a className="button text-center" href="/login">
+            Go to Login
+          </a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function getRepStats(state, repId) {
   const entries = state.crm.filter((entry) => entry.repId === repId);
   const progressValues = Object.values(state.progress[repId] || {});
-  const onboarding = Math.round(progressValues.reduce((sum, value) => sum + value, 0) / bootcampDays.length);
+  const onboarding = progressValues.length
+    ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / bootcampDays.length)
+    : 0;
   const calls = entries.length;
   const demos = entries.filter((entry) => entry.outcome === "Demo Booked").length;
   const closed = entries.filter((entry) => entry.outcome === "Closed").length;
@@ -440,10 +652,23 @@ function getRepStats(state, repId) {
   return { calls, demos, closed, followUps, onboarding, score };
 }
 
+function getEmptyStats() {
+  return { calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, score: 0 };
+}
+
 function rankReps(state) {
   return state.reps
     .map((rep) => ({ ...rep, ...getRepStats(state, rep.id) }))
     .sort((a, b) => b.score - a.score);
+}
+
+function initialsFor(value) {
+  return value
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
 }
 
 function viewTitle(view) {

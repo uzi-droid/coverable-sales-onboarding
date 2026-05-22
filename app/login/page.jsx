@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState("signin");
@@ -24,13 +25,22 @@ export default function LoginPage() {
     const supabase = createBrowserSupabaseClient();
     const result =
       mode === "signup"
-        ? await supabase.auth.signUp({ email, password })
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName.trim() } }
+          })
         : await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
 
     if (result.error) {
       setMessage(result.error.message);
+      return;
+    }
+
+    if (mode === "signup" && !result.data.session) {
+      setMessage("Account created. Check your email for the confirmation link, then sign in.");
       return;
     }
 
@@ -52,11 +62,23 @@ export default function LoginPage() {
           <div>
             <div className="eyebrow">Rep access</div>
             <h2>{mode === "signup" ? "Create your rep account" : "Sign in to your sales floor"}</h2>
-            <p>
-              This will use Supabase Auth once the free Supabase project is connected. Until then,
-              the app runs in demo mode.
-            </p>
+            <p>Use your rep account to save CRM activity, onboarding progress, and sales-floor ranking.</p>
           </div>
+
+          {mode === "signup" ? (
+            <div className="field">
+              <label htmlFor="fullName">Full name</label>
+              <input
+                id="fullName"
+                type="text"
+                autoComplete="name"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                required
+                placeholder="Maya Rivera"
+              />
+            </div>
+          ) : null}
 
           <div className="field">
             <label htmlFor="email">Email</label>
