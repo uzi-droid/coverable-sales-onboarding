@@ -633,6 +633,13 @@ function CourseView({ state, currentRep, saveProgress }) {
           updateHomework={updateHomework}
           saveProgress={saveProgress}
         />
+      ) : activeDay.id === "day4" ? (
+        <DayFourLesson
+          progress={state.progress[currentRep.id]?.day4 || 0}
+          homework={homework}
+          updateHomework={updateHomework}
+          saveProgress={saveProgress}
+        />
       ) : (
         <article className="card course-placeholder">
           <span className="eyebrow">{activeDay.title.split(":")[0]}</span>
@@ -645,6 +652,228 @@ function CourseView({ state, currentRep, saveProgress }) {
         </article>
       )}
     </div>
+  );
+}
+
+function DayFourLesson({ progress, homework, updateHomework, saveProgress }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "Start",
+    "Review",
+    "Shadow",
+    "Roleplay",
+    "Gauntlet",
+    "Calls",
+    "Score",
+    "Homework"
+  ];
+  const lastStep = steps.length - 1;
+
+  function goNext() {
+    const nextStep = Math.min(step + 1, lastStep);
+    setStep(nextStep);
+    saveProgress("day4", Math.max(progress, Math.round((nextStep / lastStep) * 75)));
+  }
+
+  function goBack() {
+    setStep(Math.max(step - 1, 0));
+  }
+
+  return (
+    <article className="card lesson-card">
+      <div className="lesson-hero">
+        <div>
+          <span className="eyebrow">Day 4</span>
+          <h3>Live Calling / Roleplay / Shadowing / Objection Handling</h3>
+          <p>
+            By the end of Day 4, reps should have completed heavy practice, live call simulations,
+            shadowing, objection drills, and manager coaching. This is where reps begin proving
+            whether they can handle real prospect conversations.
+          </p>
+        </div>
+        <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
+      </div>
+
+      <div className="lesson-steps">
+        {steps.map((label, index) => (
+          <button
+            className={index === step ? "active" : ""}
+            key={label}
+            onClick={() => setStep(index)}
+            type="button"
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 ? (
+        <LessonPanel eyebrow="Orientation" title="Day 4 is the pressure day">
+          <p className="lesson-copy">
+            Day 4 is not about passively learning new scripts. It is about reps showing they can
+            stay composed under pressure, use the scripts from Days 1-3, handle resistance, and log
+            what happened. Practice should feel close enough to live calling that weak spots become
+            obvious.
+          </p>
+          <div className="agenda-list">
+            {[
+              ["30 min", "Morning review", "Scripts, objections, standards"],
+              ["45 min", "Shadowing", "Listen to manager or top rep calls"],
+              ["45 min", "Live roleplay block", "Gatekeeper + attorney scenarios"],
+              ["45 min", "Objection gauntlet", "Rapid-fire rebuttal drills"],
+              ["45 min", "Practice calls or simulated dials", "Manager observes and scores"],
+              ["30 min", "Call review", "Feedback and coaching"],
+              ["30-60 min", "Homework", "Fix weak spots and prepare certification"]
+            ].map(([time, module, activity]) => (
+              <div className="agenda-item" key={module}>
+                <span>{time}</span>
+                <strong>{module}</strong>
+                <p>{activity}</p>
+              </div>
+            ))}
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <LessonPanel eyebrow="Morning review" title="Reload the core material before calls">
+          <p className="lesson-copy">
+            Before reps roleplay or dial, they should review the pieces they must be able to recall
+            quickly. The manager reminder for the day: Today is not about being perfect. It is about
+            proving you can stay composed, stay sharp, and keep moving the conversation forward.
+          </p>
+          <ChecklistInteraction
+            items={[
+              "Coverable 20-second pitch",
+              "Gatekeeper script",
+              "Attorney opener",
+              "Appointment-setting close",
+              "ROI examples",
+              "Top 10 objections",
+              "Tone standards"
+            ]}
+          />
+          <HomeworkField
+            label="Which script or skill feels weakest before practice starts?"
+            field="morningWeakSpot"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 2 ? (
+        <LessonPanel eyebrow="Shadowing" title="Listen like a rep, not like an audience member">
+          <p className="lesson-copy">
+            Reps should listen to 3-5 example calls. The point is not just whether the call went
+            well. The rep should notice control, pain, objections, next steps, and what they would
+            improve.
+          </p>
+          <ShadowingNotes homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 3 ? (
+        <LessonPanel eyebrow="Live roleplay" title="Five required scenarios">
+          <p className="lesson-copy">
+            Each rep completes five roleplays. The goal is not acting. The goal is automatic recall:
+            respond, ask for the next step, and keep the conversation moving.
+          </p>
+          <RoleplayCards homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 4 ? (
+        <LessonPanel eyebrow="Objection gauntlet" title="Respond fast without rambling">
+          <p className="lesson-copy">
+            The manager gives one objection every 30 seconds. The rep must respond immediately.
+            Passing means staying calm, acknowledging the objection, reframing value, and asking a
+            question or moving to a next step.
+          </p>
+          <ObjectionGauntlet homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Practice calls" title="Rules for simulated dials or live practice">
+          <p className="lesson-copy">
+            Whether the rep is doing simulated dials or real practice calls, the standard is the
+            same. Use the approved opener, keep the call clean, log what happened, and do not turn
+            resistance into an argument.
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="During practice calls, reps must"
+              items={[
+                "Use the approved opener.",
+                "Track every call disposition.",
+                "Never argue with gatekeepers.",
+                "Never overexplain.",
+                "Ask for transfer or appointment clearly.",
+                "Leave strong voicemails.",
+                "Log notes immediately."
+              ]}
+            />
+            <InfoBlock
+              title="Manager is watching for"
+              items={[
+                "Opening confidence.",
+                "Clear reason for the call.",
+                "Composure under pushback.",
+                "Brevity.",
+                "Next-step ask.",
+                "CRM quality."
+              ]}
+            />
+          </div>
+          <HomeworkField
+            label="Write the voicemail or callback note you would leave after a no-answer"
+            field="day4Voicemail"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 6 ? (
+        <LessonPanel eyebrow="Call review" title="Score the call like a manager">
+          <p className="lesson-copy">
+            Every reviewed call should produce clear coaching. Scores are not punishment. They show
+            what the rep needs to fix before certification.
+          </p>
+          <CallReviewScorecard homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 7 ? (
+        <LessonPanel eyebrow="Homework" title="Fix weak spots before certification">
+          <p className="lesson-copy">
+            Day 4 homework should be based on actual performance. The rep should review manager
+            feedback, rewrite the weakest script section, record improved objection responses, and
+            prepare for final certification.
+          </p>
+          <div className="homework-grid">
+            <HomeworkField label="Manager feedback summary" field="managerFeedbackSummary" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Rewrite your weakest script section" field="weakestScriptRewrite" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Link or notes for 5 improved objection responses" field="fiveImprovedObjections" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Final checklist memorization notes" field="finalChecklistNotes" homework={homework} updateHomework={updateHomework} />
+          </div>
+          <button className="button" type="button" onClick={() => saveProgress("day4", 100)}>
+            Mark Day 4 Complete
+          </button>
+        </LessonPanel>
+      ) : null}
+
+      <div className="lesson-controls">
+        <button className="ghost" type="button" onClick={goBack} disabled={step === 0}>
+          Back
+        </button>
+        <button className="button" type="button" onClick={goNext} disabled={step === lastStep}>
+          Next
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -2184,6 +2413,195 @@ function DayTwoQuiz({ homework, updateHomework }) {
           label={question}
           updateHomework={updateHomework}
         />
+      ))}
+    </div>
+  );
+}
+
+function ShadowingNotes({ homework, updateHomework }) {
+  const prompts = [
+    "What was the opener?",
+    "What pain point was mentioned?",
+    "Did the rep control the call?",
+    "What objection came up?",
+    "How did the rep handle it?",
+    "Was a next step created?",
+    "What would you improve?"
+  ];
+
+  return (
+    <div className="drill-stack">
+      {[1, 2, 3].map((callNumber) => (
+        <div className="shadow-card" key={callNumber}>
+          <strong>Shadow call {callNumber}</strong>
+          <div className="shadow-prompts">
+            {prompts.map((prompt, index) => (
+              <HomeworkField
+                field={`shadow${callNumber}-${index}`}
+                homework={homework}
+                key={prompt}
+                label={prompt}
+                updateHomework={updateHomework}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RoleplayCards({ homework, updateHomework }) {
+  const scenarios = [
+    {
+      title: "Roleplay 1: Gatekeeper - Friendly",
+      goal: "Get transferred.",
+      line: "Sure, what is this regarding?",
+      field: "roleplayFriendly"
+    },
+    {
+      title: "Roleplay 2: Gatekeeper - Defensive",
+      goal: "Avoid folding and identify the right decision maker.",
+      line: "We are not interested. Send an email.",
+      field: "roleplayDefensive"
+    },
+    {
+      title: "Roleplay 3: Attorney - Busy",
+      goal: "Deliver a sharp opener and book a demo.",
+      line: "I only have 30 seconds.",
+      field: "roleplayBusy"
+    },
+    {
+      title: "Roleplay 4: Attorney - Already Has Software",
+      goal: "Differentiate Coverable from case management software.",
+      line: "We already use software for cases.",
+      field: "roleplaySoftware"
+    },
+    {
+      title: "Roleplay 5: Closing Call - Price Pushback",
+      goal: "Explain ROI and ask for the next step.",
+      line: "This seems expensive.",
+      field: "roleplayPrice"
+    }
+  ];
+
+  return (
+    <div className="roleplay-grid">
+      {scenarios.map((scenario) => (
+        <div className="roleplay-card" key={scenario.title}>
+          <span>{scenario.title}</span>
+          <strong>{scenario.line}</strong>
+          <p>{scenario.goal}</p>
+          <HomeworkField
+            label="Write your response"
+            field={scenario.field}
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ObjectionGauntlet({ homework, updateHomework }) {
+  const [active, setActive] = useState("Send me information.");
+  const objections = [
+    "Send me information.",
+    "We are too busy.",
+    "Not interested.",
+    "We already have software.",
+    "I do not trust AI.",
+    "Talk to my office manager.",
+    "We have paralegals for that.",
+    "How much does it cost?",
+    "This sounds expensive.",
+    "Call me next month.",
+    "I need to think about it.",
+    "I do not have time for a demo.",
+    "We are a small firm.",
+    "I do not make software decisions.",
+    "Email me and I'll look at it."
+  ];
+
+  return (
+    <div className="drill-stack">
+      <div className="segmented-buttons">
+        {objections.map((objection) => (
+          <button
+            className={active === objection ? "active" : ""}
+            key={objection}
+            onClick={() => setActive(objection)}
+            type="button"
+          >
+            {objection}
+          </button>
+        ))}
+      </div>
+      <div className="script-box compact-script gauntlet-card">
+        <strong>Current objection</strong>
+        <br />
+        {active}
+      </div>
+      <div className="lesson-grid">
+        <InfoBlock
+          title="Passing standard"
+          items={[
+            "Stay calm.",
+            "Do not ramble.",
+            "Acknowledge the objection.",
+            "Reframe value.",
+            "Ask a question or move to next step."
+          ]}
+        />
+        <HomeworkField
+          label="Write the response you would give in 30 seconds"
+          field={`gauntlet-${active}`}
+          homework={homework}
+          updateHomework={updateHomework}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CallReviewScorecard({ homework, updateHomework }) {
+  const categories = [
+    "Opening confidence",
+    "Clarity of reason for call",
+    "Gatekeeper control",
+    "Attorney relevance",
+    "Question quality",
+    "Objection handling",
+    "Brevity",
+    "Tone",
+    "Next-step ask",
+    "CRM/call notes"
+  ];
+
+  return (
+    <div className="scorecard">
+      {categories.map((category) => (
+        <div className="score-row" key={category}>
+          <strong>{category}</strong>
+          <label>
+            Score 1-5
+            <input
+              max="5"
+              min="1"
+              type="number"
+              value={homework[`score-${category}`] || ""}
+              onChange={(event) => updateHomework(`score-${category}`, event.target.value)}
+            />
+          </label>
+          <label>
+            Notes
+            <textarea
+              value={homework[`score-notes-${category}`] || ""}
+              onChange={(event) => updateHomework(`score-notes-${category}`, event.target.value)}
+            />
+          </label>
+        </div>
       ))}
     </div>
   );
