@@ -589,6 +589,16 @@ tr:last-child td {
   gap: 14px;
 }
 
+.inline-loading {
+  display: grid;
+  grid-template-columns: 160px auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .loading-bar {
   position: relative;
   height: 8px;

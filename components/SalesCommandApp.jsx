@@ -5,6 +5,7 @@ import { bootcampDays, initialState, objectionBank } from "@/lib/demoData";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "coverable-sales-command-next-v1";
+const REQUEST_TIMEOUT_MS = 6500;
 
 function cloneInitialState() {
   return JSON.parse(JSON.stringify(initialState));
@@ -32,6 +33,7 @@ export default function SalesCommandApp() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(configured);
   const [loadingSlow, setLoadingSlow] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -54,14 +56,28 @@ export default function SalesCommandApp() {
     const supabase = createBrowserSupabaseClient();
 
     async function boot() {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) setNotice(error.message);
-      setSession(data.session);
-      if (data.session) await loadLiveState(supabase, data.session.user.id);
-      setMounted(true);
-      setLoading(false);
-      setLoadingSlow(false);
-      window.clearTimeout(slowTimer);
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.getSession(),
+          "Sign-in check took too long"
+        );
+        if (error) setNotice(error.message);
+        setSession(data.session);
+        setMounted(true);
+        setLoading(false);
+        setLoadingSlow(false);
+        window.clearTimeout(slowTimer);
+
+        if (data.session) {
+          seedCurrentUser(data.session.user);
+          loadLiveState(supabase, data.session.user.id);
+        }
+      } catch (error) {
+        setNotice(error.message);
+        setMounted(true);
+        setLoading(false);
+        window.clearTimeout(slowTimer);
+      }
     }
 
     boot();
@@ -70,7 +86,10 @@ export default function SalesCommandApp() {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) await loadLiveState(supabase, nextSession.user.id);
+      if (nextSession) {
+        seedCurrentUser(nextSession.user);
+        loadLiveState(supabase, nextSession.user.id);
+      }
     });
 
     return () => {
@@ -81,75 +100,123 @@ export default function SalesCommandApp() {
 
   async function loadLiveState(supabase, currentUserId) {
     setNotice("");
+    setWorkspaceLoading(true);
+    repairProfile(supabase);
 
-    await ensureProfile(supabase);
+    try {
+      const [
+        { data: profiles, error: profileError },
+        { data: progress, error: progressError },
+        { data: crm, error: crmError }
+      ] = await withTimeout(
+        Promise.all([
+          supabase.from("profiles").select("id, full_name, email, start_date").order("created_at", { ascending: true }),
+          supabase.from("onboarding_progress").select("user_id, module_id, percent_complete"),
+          supabase
+            .from("crm_activities")
+            .select("id, user_id, firm_name, contact_name, contact_role, channel, outcome, objection, notes, next_follow_up, created_at")
+            .order("created_at", { ascending: false })
+        ]),
+        "Workspace data took too long to load"
+      );
 
-    const [{ data: profiles, error: profileError }, { data: progress, error: progressError }, { data: crm, error: crmError }] =
-      await Promise.all([
-        supabase.from("profiles").select("id, full_name, email, start_date").order("created_at", { ascending: true }),
-        supabase.from("onboarding_progress").select("user_id, module_id, percent_complete"),
-        supabase
-          .from("crm_activities")
-          .select("id, user_id, firm_name, contact_name, contact_role, channel, outcome, objection, notes, next_follow_up, created_at")
-          .order("created_at", { ascending: false })
-      ]);
-
-    const firstError = profileError || progressError || crmError;
-    if (firstError) {
-      setNotice(firstError.message);
-      return;
-    }
-
-    const reps = (profiles || []).map((profile) => ({
-      id: profile.id,
-      name: profile.full_name,
-      email: profile.email,
-      initials: initialsFor(profile.full_name || profile.email),
-      startDate: profile.start_date
-    }));
-
-    if (!reps.some((rep) => rep.id === currentUserId)) {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-      if (user) {
-        reps.push({
-          id: user.id,
-          name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
-          email: user.email,
-          initials: initialsFor(user.user_metadata?.full_name || user.email || "New Rep"),
-          startDate: new Date().toISOString().slice(0, 10)
-        });
+      const firstError = profileError || progressError || crmError;
+      if (firstError) {
+        setNotice(firstError.message);
+        return;
       }
+
+      const reps = (profiles || []).map((profile) => ({
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        initials: initialsFor(profile.full_name || profile.email),
+        startDate: profile.start_date
+      }));
+
+      if (!reps.some((rep) => rep.id === currentUserId)) {
+        const { data: userData } = await withTimeout(supabase.auth.getUser(), "User profile took too long");
+        const user = userData.user;
+        if (user) {
+          reps.push(profileFromUser(user));
+        }
+      }
+
+      const progressByRep = {};
+      reps.forEach((rep) => {
+        progressByRep[rep.id] = Object.fromEntries(bootcampDays.map((day) => [day.id, 0]));
+      });
+      (progress || []).forEach((row) => {
+        progressByRep[row.user_id] = progressByRep[row.user_id] || {};
+        progressByRep[row.user_id][row.module_id] = row.percent_complete;
+      });
+
+      setState((current) => ({
+        ...current,
+        currentRepId: currentUserId,
+        reps,
+        progress: progressByRep,
+        crm: (crm || []).map((row) => ({
+          id: row.id,
+          repId: row.user_id,
+          firm: row.firm_name,
+          contact: row.contact_name,
+          contactRole: row.contact_role,
+          outcome: row.outcome,
+          channel: row.channel,
+          objection: row.objection || "",
+          notes: row.notes,
+          nextFollowUp: row.next_follow_up || "",
+          createdAt: row.created_at?.slice(0, 10) || ""
+        }))
+      }));
+    } catch (error) {
+      setNotice(`${error.message}. You can still sign out and try again.`);
+    } finally {
+      setWorkspaceLoading(false);
     }
+  }
 
-    const progressByRep = {};
-    reps.forEach((rep) => {
-      progressByRep[rep.id] = Object.fromEntries(bootcampDays.map((day) => [day.id, 0]));
-    });
-    (progress || []).forEach((row) => {
-      progressByRep[row.user_id] = progressByRep[row.user_id] || {};
-      progressByRep[row.user_id][row.module_id] = row.percent_complete;
-    });
+  function seedCurrentUser(user) {
+    setState((current) => {
+      if (current.reps.some((rep) => rep.id === user.id)) {
+        return { ...current, currentRepId: user.id };
+      }
 
-    setState((current) => ({
-      ...current,
-      currentRepId: currentUserId,
-      reps,
-      progress: progressByRep,
-      crm: (crm || []).map((row) => ({
-        id: row.id,
-        repId: row.user_id,
-        firm: row.firm_name,
-        contact: row.contact_name,
-        contactRole: row.contact_role,
-        outcome: row.outcome,
-        channel: row.channel,
-        objection: row.objection || "",
-        notes: row.notes,
-        nextFollowUp: row.next_follow_up || "",
-        createdAt: row.created_at?.slice(0, 10) || ""
-      }))
-    }));
+      const nextRep = profileFromUser(user);
+      return {
+        ...current,
+        currentRepId: user.id,
+        reps: [nextRep],
+        progress: {
+          [user.id]: Object.fromEntries(bootcampDays.map((day) => [day.id, 0]))
+        },
+        crm: []
+      };
+    });
+  }
+
+  async function repairProfile(supabase) {
+    try {
+      const { data } = await withTimeout(supabase.auth.getUser(), "User profile took too long");
+      const user = data.user;
+      if (user) {
+        await withTimeout(
+          supabase.from("profiles").upsert(
+            {
+              id: user.id,
+              full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
+              email: user.email,
+              role: "rep"
+            },
+            { onConflict: "id" }
+          ),
+          "Profile repair took too long"
+        );
+      }
+    } catch {
+      // Profile repair is best-effort. It must never block the app shell.
+    }
   }
 
   function updateState(updater) {
@@ -330,6 +397,12 @@ export default function SalesCommandApp() {
         </section>
 
         {notice ? <div className="notice">{notice}</div> : null}
+        {workspaceLoading ? (
+          <div className="inline-loading">
+            <div className="loading-bar" />
+            <span>Syncing sales floor...</span>
+          </div>
+        ) : null}
 
         {state.activeView === "team" ? (
           <TeamView
@@ -626,22 +699,6 @@ function Field({ label, children, wide }) {
   );
 }
 
-async function ensureProfile(supabase) {
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
-  if (!user) return;
-
-  await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
-      email: user.email,
-      role: "rep"
-    },
-    { onConflict: "id" }
-  );
-}
-
 function LoadingShell({ slow, notice }) {
   return (
     <main className="login-page">
@@ -658,6 +715,11 @@ function LoadingShell({ slow, notice }) {
           <div className="notice">
             {slow ? notice || "Still loading your workspace..." : "Loading your workspace..."}
           </div>
+          {slow ? (
+            <a className="ghost text-center" href="/login">
+              Back to Login
+            </a>
+          ) : null}
         </div>
       </section>
     </main>
@@ -722,6 +784,26 @@ function initialsFor(value) {
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join("");
+}
+
+function profileFromUser(user) {
+  const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep";
+  return {
+    id: user.id,
+    name,
+    email: user.email,
+    initials: initialsFor(name || user.email || "New Rep"),
+    startDate: new Date().toISOString().slice(0, 10)
+  };
+}
+
+function withTimeout(promise, message, timeoutMs = REQUEST_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    })
+  ]);
 }
 
 function viewTitle(view) {
