@@ -640,6 +640,13 @@ function CourseView({ state, currentRep, saveProgress }) {
           updateHomework={updateHomework}
           saveProgress={saveProgress}
         />
+      ) : activeDay.id === "day5" ? (
+        <DayFiveLesson
+          progress={state.progress[currentRep.id]?.day5 || 0}
+          homework={homework}
+          updateHomework={updateHomework}
+          saveProgress={saveProgress}
+        />
       ) : (
         <article className="card course-placeholder">
           <span className="eyebrow">{activeDay.title.split(":")[0]}</span>
@@ -652,6 +659,188 @@ function CourseView({ state, currentRep, saveProgress }) {
         </article>
       )}
     </div>
+  );
+}
+
+function DayFiveLesson({ progress, homework, updateHomework, saveProgress }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "Start",
+    "Metrics",
+    "Certify",
+    "Scripts",
+    "Follow-up",
+    "Qualify",
+    "Confidence",
+    "Scorecards",
+    "Decision"
+  ];
+  const lastStep = steps.length - 1;
+
+  function goNext() {
+    const nextStep = Math.min(step + 1, lastStep);
+    setStep(nextStep);
+    saveProgress("day5", Math.max(progress, Math.round((nextStep / lastStep) * 75)));
+  }
+
+  function goBack() {
+    setStep(Math.max(step - 1, 0));
+  }
+
+  return (
+    <article className="card lesson-card">
+      <div className="lesson-hero">
+        <div>
+          <span className="eyebrow">Day 5</span>
+          <h3>Live Calling / Performance Review / Improvement Plan</h3>
+          <p>
+            By the end of Day 5, reps should complete live call practice, review performance, fix
+            weak spots, and pass or fail final certification before being cleared to call prospects
+            independently.
+          </p>
+        </div>
+        <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
+      </div>
+
+      <div className="lesson-steps">
+        {steps.map((label, index) => (
+          <button
+            className={index === step ? "active" : ""}
+            key={label}
+            onClick={() => setStep(index)}
+            type="button"
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 ? (
+        <LessonPanel eyebrow="Orientation" title="Final certification day">
+          <p className="lesson-copy">
+            Day 5 decides whether the rep is ready to call prospects independently. The rep should
+            prove activity discipline, script control, objection handling, follow-up skill, and the
+            ability to ask for a clear next step. A good attitude matters, but clearance is based on
+            performance.
+          </p>
+          <div className="agenda-list">
+            {[
+              ["30 min", "Morning certification prep", "Review standards and scripts"],
+              ["60-90 min", "Live calls or simulated calling", "Manager observes and scores"],
+              ["45 min", "Call review", "Listen to recordings and grade"],
+              ["45 min", "Final roleplay certification", "Gatekeeper, appointment, closing call"],
+              ["30 min", "Performance review", "Scorecard and improvement plan"],
+              ["30 min", "Final certification decision", "Cleared, conditional, or not cleared"]
+            ].map(([time, module, activity]) => (
+              <div className="agenda-item" key={module}>
+                <span>{time}</span>
+                <strong>{module}</strong>
+                <p>{activity}</p>
+              </div>
+            ))}
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <LessonPanel eyebrow="Live calling expectations" title="Track the work like a professional">
+          <p className="lesson-copy">
+            Each rep should complete 30-50 outbound dials, or 10-15 high-quality simulated calls if
+            live calling is not available. Every attempt must be logged so coaching is based on
+            reality, not memory.
+          </p>
+          <DailyMetricsTracker homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 2 ? (
+        <LessonPanel eyebrow="Final certification roleplay" title="Pass all three rooms">
+          <p className="lesson-copy">
+            The rep must pass three roleplays: gatekeeper access, appointment setting, and closing
+            call. This tests the full bootcamp: reason for call, qualification, curiosity, ROI,
+            objections, and next-step control.
+          </p>
+          <CertificationRoleplays homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 3 ? (
+        <LessonPanel eyebrow="Outreach script library" title="Phone, LinkedIn, email, and text scripts">
+          <p className="lesson-copy">
+            Reps should not freestyle when pressure rises. This library gives them clean language
+            for calls, voicemails, LinkedIn, email, text, confirmations, no-shows, and soft
+            rejections.
+          </p>
+          <OutreachScriptLibrary />
+        </LessonPanel>
+      ) : null}
+
+      {step === 4 ? (
+        <LessonPanel eyebrow="Follow-up sequences" title="Do not leave follow-up vague">
+          <p className="lesson-copy">
+            Follow-up should be multi-channel, specific, and tied to the same pain: reducing manual
+            immigration case prep and drafting workload. Reps should know what to do after no
+            answer, booked appointments, no-shows, and soft rejections.
+          </p>
+          <FollowUpSequences />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Qualification guide" title="Know who is worth pursuing">
+          <p className="lesson-copy">
+            Good sales discipline includes knowing who is a fit. A strong rep does not treat every
+            firm equally. They look for volume, manual workflow, staff bottlenecks, decision makers,
+            and a reason to act.
+          </p>
+          <ProspectQualificationGuide homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 6 ? (
+        <LessonPanel eyebrow="Tone standard" title="Confident without pushy">
+          <p className="lesson-copy">
+            Certification is not just what the rep says. It is how they sound. Professional reps are
+            firm with direction, but they still acknowledge what the prospect says.
+          </p>
+          <ConfidenceLanguageDrill homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 7 ? (
+        <LessonPanel eyebrow="Scorecards" title="Grade the final performance">
+          <p className="lesson-copy">
+            The manager should use separate scorecards for gatekeeper, appointment-setting, and
+            closing call skill. Passing requires minimum scores, not vibes.
+          </p>
+          <FinalScorecards homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 8 ? (
+        <LessonPanel eyebrow="Certification decision" title="Cleared, conditional, or not cleared">
+          <p className="lesson-copy">
+            A rep is certified only if they can explain Coverable, handle gatekeepers, book
+            appointments, run a closing conversation, follow up correctly, and track activity
+            clearly.
+          </p>
+          <FinalCertificationDecision homework={homework} updateHomework={updateHomework} />
+          <button className="button" type="button" onClick={() => saveProgress("day5", 100)}>
+            Mark Day 5 Complete
+          </button>
+        </LessonPanel>
+      ) : null}
+
+      <div className="lesson-controls">
+        <button className="ghost" type="button" onClick={goBack} disabled={step === 0}>
+          Back
+        </button>
+        <button className="button" type="button" onClick={goNext} disabled={step === lastStep}>
+          Next
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -2603,6 +2792,440 @@ function CallReviewScorecard({ homework, updateHomework }) {
           </label>
         </div>
       ))}
+    </div>
+  );
+}
+
+function DailyMetricsTracker({ homework, updateHomework }) {
+  const metrics = [
+    ["Total calls", "30-50 dials or 10-15 high-quality simulated calls"],
+    ["Conversations", "Track real connects"],
+    ["Gatekeeper conversations", "Measures contact quality"],
+    ["Attorney conversations", "Measures decision-maker reach"],
+    ["Transfers", "Measures gatekeeper success"],
+    ["Appointments booked", "Primary top-of-funnel outcome"],
+    ["Voicemails left", "Track no-answer discipline"],
+    ["Emails sent", "Track multi-channel activity"],
+    ["LinkedIn messages sent", "Track outbound reach"],
+    ["Texts sent", "Track direct follow-up"],
+    ["Objections heard", "Helps coach patterns"],
+    ["Follow-ups scheduled", "Measures pipeline discipline"]
+  ];
+
+  return (
+    <div className="metrics-grid">
+      {metrics.map(([metric, note]) => (
+        <label className="metric-input" key={metric}>
+          <span>{metric}</span>
+          <input
+            min="0"
+            type="number"
+            value={homework[`metric-${metric}`] || ""}
+            onChange={(event) => updateHomework(`metric-${metric}`, event.target.value)}
+          />
+          <em>{note}</em>
+        </label>
+      ))}
+      <HomeworkField
+        label="Objections heard and patterns noticed"
+        field="day5ObjectionPatterns"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function CertificationRoleplays({ homework, updateHomework }) {
+  const roleplays = [
+    {
+      title: "Part 1: Gatekeeper",
+      scenario: "Gatekeeper is skeptical and says: What is this about? The attorney is busy. You can send information.",
+      must: [
+        "Explain reason for call.",
+        "Avoid sounding like a random salesperson.",
+        "Handle busy.",
+        "Handle send info.",
+        "Identify decision maker or get callback path."
+      ],
+      field: "certGatekeeper"
+    },
+    {
+      title: "Part 2: Appointment Setting",
+      scenario: "Attorney answers but is short on time.",
+      must: [
+        "Deliver sharp opener.",
+        "Ask at least 2 qualification questions.",
+        "Create curiosity.",
+        "Avoid overexplaining.",
+        "Ask for demo.",
+        "Confirm appointment."
+      ],
+      field: "certAppointment"
+    },
+    {
+      title: "Part 3: Closing Call",
+      scenario: "Attorney has manual workflows but is skeptical of AI and price.",
+      must: [
+        "Set agenda.",
+        "Ask discovery questions.",
+        "Identify pain.",
+        "Explain ROI.",
+        "Handle AI concern.",
+        "Handle price concern.",
+        "Ask for next step or sale."
+      ],
+      field: "certClosing"
+    }
+  ];
+
+  return (
+    <div className="roleplay-grid">
+      {roleplays.map((roleplay) => (
+        <div className="roleplay-card" key={roleplay.title}>
+          <span>{roleplay.title}</span>
+          <strong>{roleplay.scenario}</strong>
+          <ul className="compact-list">
+            {roleplay.must.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <HomeworkField
+            label="Manager notes / rep plan"
+            field={roleplay.field}
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OutreachScriptLibrary() {
+  const [active, setActive] = useState("phone");
+  const libraries = {
+    phone: [
+      ["Cold call opener: Gatekeeper", "Hi, this is [Name] with Coverable. I am reaching out regarding legal document preparation and immigration case workflow for the firm. Who would be the best attorney to speak with about that?"],
+      ["Cold call opener: Attorney", "Hi [Attorney Name], this is [Name] with Coverable. I will be brief. We help immigration law firms reduce the time attorneys and paralegals spend on repetitive document prep, briefs, motions, and case materials using legal AI. I wanted to see if it would be worth showing you how it works for your firm."],
+      ["Appointment-setting script", "Quick question - is your team currently preparing most case documents, briefs, motions, and supporting materials manually, or do you already have software helping with that? If manual: That is exactly where this tends to help. The easiest next step is a quick 10-15 minute walkthrough so you can see whether it fits your workflow. Are you better tomorrow morning or afternoon?"],
+      ["Voicemail", "Hi [Attorney Name], this is [Name] with Coverable. I am reaching out because we help immigration firms reduce repetitive document prep, legal drafting, briefs, motions, and case material workload. I will send a short note as well. You can reach me at [phone number]. Again, [phone number]."],
+      ["Follow-up call", "Hi [Attorney Name], this is [Name] with Coverable. I left a note about reducing repetitive immigration case prep and drafting workload. I wanted to see if it is worth putting 10-15 minutes on the calendar to show how it works."]
+    ],
+    linkedin: [
+      ["Connection request 1", "Hi [Name], I saw your firm handles immigration matters. I work with Coverable - we help firms reduce repetitive drafting and case prep time. Wanted to connect."],
+      ["Connection request 2", "Hi [Name], I work with immigration firms on cutting down manual document prep and case material workload. Thought it made sense to connect."],
+      ["First message", "Thanks for connecting, [Name]. Quick question - is your team still preparing most immigration case documents, briefs, motions, and supporting materials manually?"],
+      ["First message alternative", "Appreciate the connection. Coverable helps immigration firms reduce repetitive case prep and drafting work with legal AI. Would it be worth showing you a quick example?"],
+      ["No-reply follow-up 1", "Worth a quick look if your paralegals are spending hours on repetitive case prep. This is built to reduce that workload, not add more software headaches."],
+      ["No-reply follow-up 2", "Should I send over a quick example of how immigration firms use this for documents, briefs, motions, and case materials?"],
+      ["Already have software", "Makes sense. Most firms do. Coverable is more focused on reducing drafting and case prep workload, not just managing cases. Are briefs, motions, or packets still being prepared manually?"],
+      ["Appointment ask", "The easiest way to see if it is relevant is a 10-15 minute walkthrough. Are you open tomorrow or later this week?"]
+    ],
+    email: [
+      ["Cold email 1", "Subject: Reducing immigration case prep time\n\nHi [Attorney Name],\n\nI am reaching out because Coverable helps immigration law firms reduce the time spent on repetitive document preparation, legal drafting, briefs, motions, and supporting case materials.\n\nIf your paralegals or attorneys are spending hours preparing case materials manually, Coverable may help reduce that workload so your team can move cases faster without immediately adding staff.\n\nWould it be worth a quick 10-15 minute walkthrough this week?\n\nBest,\n[Name]"],
+      ["Cold email 2", "Subject: Quick question about your immigration workflow\n\nHi [Attorney Name],\n\nQuick question - is your team still preparing most immigration case documents, briefs, motions, and supporting materials manually?\n\nCoverable helps firms reduce that repetitive workload using legal AI, while keeping attorney review and control in place.\n\nOpen to a short walkthrough to see if it fits your workflow?\n\nBest,\n[Name]"],
+      ["Follow-up email 1", "Subject: Re: immigration case prep\n\nHi [Attorney Name],\n\nFollowing up here.\n\nThe reason I reached out is simple: if your team is spending hours per case on repetitive preparation work, there may be a real opportunity to save staff time and increase capacity without hiring more people.\n\nWorth taking a quick look?\n\nBest,\n[Name]"],
+      ["Follow-up email 2", "Subject: Worth a quick look?\n\nHi [Attorney Name],\n\nI do not want to flood your inbox.\n\nIf reducing repetitive document prep, briefs, motions, and case material workload is relevant for your firm, Coverable is worth a quick look.\n\nIf not, no problem. Should I send over a short example?\n\nBest,\n[Name]"],
+      ["Booked appointment confirmation", "Subject: Coverable walkthrough confirmed\n\nHi [Attorney Name],\n\nConfirmed for [Day] at [Time].\n\nI will show how Coverable helps immigration firms reduce repetitive legal drafting, document preparation, briefs, motions, and supporting case material workload.\n\nThe goal is to see whether this can save your team meaningful time on active matters.\n\nBest,\n[Name]"],
+      ["Post-call email", "Subject: Next steps with Coverable\n\nHi [Attorney Name],\n\nGood speaking with you today.\n\nBased on what you shared, the main opportunity is reducing the time your team spends on [specific pain: document prep / briefs / motions / case packets / supporting materials].\n\nThe next step we discussed is [next step].\n\nI will follow up with [materials / invite / trial access / next meeting details].\n\nBest,\n[Name]"],
+      ["No-show email", "Subject: Rescheduling Coverable walkthrough\n\nHi [Attorney Name],\n\nLooks like we missed each other for the Coverable walkthrough.\n\nNo problem - I know your schedule is busy. Since this may help reduce repetitive case prep and drafting workload for your team, I still think it is worth reconnecting.\n\nAre you better later today or tomorrow?\n\nBest,\n[Name]"],
+      ["Soft rejection follow-up", "Subject: Keeping this on your radar\n\nHi [Attorney Name],\n\nUnderstood that now may not be the right time.\n\nI will keep this brief: if paralegal workload, manual drafting, or case prep capacity becomes a bottleneck, Coverable may be worth revisiting.\n\nWould it be reasonable for me to check back in [timeframe]?\n\nBest,\n[Name]"]
+    ],
+    text: [
+      ["Text 1", "Hi [Attorney Name], this is [Name] with Coverable. We help immigration firms reduce repetitive document prep and case drafting time. Worth a quick look?"],
+      ["Text 2", "Quick question - is your team still preparing most immigration case packets, briefs, and supporting docs manually?"],
+      ["Text 3", "Coverable helps immigration firms save staff time on repetitive case prep. I think it may be relevant for your firm. Open to a 10-min walkthrough?"],
+      ["Text 4", "If your paralegals are overloaded with case prep and drafting, Coverable may help reduce that workload. Should I send a quick example?"],
+      ["Text 5", "Not sure if this is relevant, but we help immigration firms handle more case prep without immediately hiring more staff. Worth showing you?"],
+      ["After no answer", "Just following up - should I send over a quick example of how Coverable helps with immigration case prep?"],
+      ["After booked appointment", "Confirmed for [Day] at [Time]. I will show how Coverable helps reduce repetitive immigration case prep and drafting workload."],
+      ["After no-show", "Looks like we missed each other. No problem. Are you better later today or tomorrow for the Coverable walkthrough?"]
+    ]
+  };
+
+  return (
+    <div className="drill-stack">
+      <div className="segmented-buttons">
+        {Object.keys(libraries).map((key) => (
+          <button className={active === key ? "active" : ""} key={key} onClick={() => setActive(key)} type="button">
+            {key}
+          </button>
+        ))}
+      </div>
+      <ScriptLibrary scripts={libraries[active]} />
+    </div>
+  );
+}
+
+function FollowUpSequences() {
+  return (
+    <div className="lesson-grid">
+      <InfoBlock
+        title="No answer sequence"
+        items={[
+          "Day 1: Call + voicemail + email.",
+          "Voicemail: reaching out about reducing repetitive immigration case prep and drafting workload.",
+          "Email: ask if the team still prepares immigration documents, briefs, motions, and supporting materials manually.",
+          "Day 2: LinkedIn message.",
+          "Day 4: Follow-up call.",
+          "Day 7: Breakup email asking whether to close this out."
+        ]}
+      />
+      <InfoBlock
+        title="Booked appointment sequence"
+        items={[
+          "Immediately after booking: send calendar invite and confirmation email.",
+          "24 hours before: confirm walkthrough and keep focus on reducing repetitive case prep and drafting workload.",
+          "1 hour before: send quick reminder for the walkthrough."
+        ]}
+      />
+      <InfoBlock
+        title="No-show sequence"
+        items={[
+          "Same day: Looks like we missed each other. Are you better later today or tomorrow?",
+          "Next day: reschedule and remind them why manual case prep makes this worth seeing.",
+          "3 days later: ask whether to keep trying or whether now is not the right time."
+        ]}
+      />
+      <InfoBlock
+        title="Soft rejection sequence"
+        items={[
+          "Ask whether timing is blocked by budget, workflow, or case volume.",
+          "Later follow-up: ask whether anything changed around paralegal workload, case volume, or manual drafting."
+        ]}
+      />
+    </div>
+  );
+}
+
+function ProspectQualificationGuide({ homework, updateHomework }) {
+  return (
+    <div className="drill-stack">
+      <div className="lesson-grid">
+        <InfoBlock
+          title="Good prospect signs"
+          items={[
+            "Immigration case volume.",
+            "Multiple paralegals or overloaded staff.",
+            "Manual document preparation.",
+            "Frequent briefs, motions, declarations, packets, or supporting documents.",
+            "Desire to grow case volume.",
+            "Staff capacity issues.",
+            "Interest in efficiency.",
+            "Decision maker willing to review software."
+          ]}
+        />
+        <InfoBlock
+          title="Weak prospect signs"
+          items={[
+            "Very low case volume.",
+            "No repeatable workflows.",
+            "No staff bottleneck.",
+            "No interest in technology.",
+            "No budget or authority.",
+            "No urgency.",
+            "Practice area mismatch."
+          ]}
+        />
+        <InfoBlock
+          title="Possible decision makers"
+          items={[
+            "Firm owner.",
+            "Managing attorney.",
+            "Partner.",
+            "Operations manager.",
+            "Practice manager.",
+            "Office manager.",
+            "Head paralegal.",
+            "Legal operations director."
+          ]}
+        />
+        <div className="script-box compact-script">
+          <strong>Decision maker question</strong>
+          <br />
+          Who besides you would be involved in deciding whether a tool like this fits the firm?
+        </div>
+      </div>
+      <HomeworkField
+        label="Describe the strongest Coverable prospect in your own words"
+        field="idealProspectDescription"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function ConfidenceLanguageDrill({ homework, updateHomework }) {
+  return (
+    <div className="drill-stack">
+      <div className="compare-grid">
+        <InfoBlock
+          title="Use confident language"
+          items={[
+            "The reason I am calling is...",
+            "The easiest next step is...",
+            "This is most relevant if...",
+            "Based on what you said...",
+            "Let us do this...",
+            "Would it be worth taking a quick look?"
+          ]}
+        />
+        <InfoBlock
+          title="Avoid weak language"
+          items={[
+            "I was just calling...",
+            "I am sorry to bother you...",
+            "Maybe you might be interested...",
+            "I do not know if this applies...",
+            "Whenever you have time...",
+            "Can I maybe send you something?"
+          ]}
+        />
+      </div>
+      <div className="compare-grid">
+        <InfoBlock title="Pushy" items={["Ignoring what prospect says.", "Talking over them.", "Forcing a close with no fit.", "Being aggressive with tone.", "Arguing."]} />
+        <InfoBlock title="Professional" items={["Acknowledging and redirecting.", "Asking controlled questions.", "Creating a logical next step.", "Being firm with direction.", "Reframing."]} />
+      </div>
+      <HomeworkField
+        label="Rewrite a weak line into confident professional language"
+        field="confidenceRewrite"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function FinalScorecards({ homework, updateHomework }) {
+  const cards = [
+    {
+      title: "Gatekeeper scorecard",
+      passing: "Passing score: 26/35",
+      categories: ["Confidence", "Reason for call", "Professionalism", "Transfer ask", "Objection handling", "Brevity", "Outcome control"]
+    },
+    {
+      title: "Appointment-setting scorecard",
+      passing: "Passing score: 27/35",
+      categories: ["Opener", "Product explanation", "Qualification", "Curiosity", "Objection handling", "Demo ask", "Confirmation"]
+    },
+    {
+      title: "Closing call scorecard",
+      passing: "Passing score: 35/45",
+      categories: ["Agenda setting", "Discovery", "Pain development", "ROI explanation", "Demo relevance", "Objection handling", "Trial closes", "Final ask", "Next step"]
+    }
+  ];
+
+  return (
+    <div className="drill-stack">
+      {cards.map((card) => (
+        <div className="scorecard-block" key={card.title}>
+          <strong>{card.title}</strong>
+          <span className="pill">{card.passing}</span>
+          <FinalScoreRows
+            categories={card.categories}
+            homework={homework}
+            prefix={card.title}
+            updateHomework={updateHomework}
+          />
+        </div>
+      ))}
+      <QuestionBank
+        title="Call review checklist"
+        questions={[
+          "Did the rep sound confident in the first 5 seconds?",
+          "Did the rep clearly explain why they were calling?",
+          "Did the rep avoid sounding like a generic salesperson?",
+          "Did the rep ask a strong question early?",
+          "Did the rep talk too much?",
+          "Did the rep connect Coverable to law firm pain?",
+          "Did the rep handle objections or fold?",
+          "Did the rep ask for a next step?",
+          "Did the rep confirm the next step clearly?",
+          "Did the rep log notes correctly?"
+        ]}
+      />
+    </div>
+  );
+}
+
+function FinalScoreRows({ categories, homework, prefix, updateHomework }) {
+  return (
+    <div className="scorecard compact-scorecard">
+      {categories.map((category) => (
+        <div className="score-row" key={category}>
+          <strong>{category}</strong>
+          <label>
+            Score
+            <input
+              max="5"
+              min="1"
+              type="number"
+              value={homework[`${prefix}-${category}`] || ""}
+              onChange={(event) => updateHomework(`${prefix}-${category}`, event.target.value)}
+            />
+          </label>
+          <label>
+            Notes
+            <textarea
+              value={homework[`${prefix}-notes-${category}`] || ""}
+              onChange={(event) => updateHomework(`${prefix}-notes-${category}`, event.target.value)}
+            />
+          </label>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FinalCertificationDecision({ homework, updateHomework }) {
+  return (
+    <div className="drill-stack">
+      <div className="lesson-grid">
+        <InfoBlock
+          title="Certified reps can"
+          items={[
+            "Explain Coverable in under 20 seconds.",
+            "Name at least five law firm pain points.",
+            "Explain ROI using labor hours saved.",
+            "Explain attorney review is supported, not replaced.",
+            "Use gatekeeper opener confidently.",
+            "Handle what is this regarding, send information, busy, and office manager.",
+            "Ask qualification questions and book a demo.",
+            "Handle at least two objections and ask for next step.",
+            "Use phone, email, LinkedIn, and text appropriately.",
+            "Track calls, conversations, appointments, objections, follow-ups, and notes."
+          ]}
+        />
+        <InfoBlock
+          title="Decision definitions"
+          items={[
+            "Cleared: may call live prospects independently.",
+            "Conditional clearance: may call live prospects with manager review.",
+            "Not cleared: cannot call live prospects independently."
+          ]}
+        />
+      </div>
+      <div className="decision-grid">
+        {["Cleared", "Conditional Clearance", "Not Cleared"].map((decision) => (
+          <label className="decision-option" key={decision}>
+            <input
+              checked={homework.certificationDecision === decision}
+              name="certificationDecision"
+              onChange={() => updateHomework("certificationDecision", decision)}
+              type="radio"
+            />
+            <span>{decision}</span>
+          </label>
+        ))}
+      </div>
+      <HomeworkField
+        label="Improvement plan / final manager notes"
+        field="finalImprovementPlan"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
     </div>
   );
 }
