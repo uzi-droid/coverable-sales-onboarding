@@ -626,6 +626,13 @@ function CourseView({ state, currentRep, saveProgress }) {
           updateHomework={updateHomework}
           saveProgress={saveProgress}
         />
+      ) : activeDay.id === "day3" ? (
+        <DayThreeLesson
+          progress={state.progress[currentRep.id]?.day3 || 0}
+          homework={homework}
+          updateHomework={updateHomework}
+          saveProgress={saveProgress}
+        />
       ) : (
         <article className="card course-placeholder">
           <span className="eyebrow">{activeDay.title.split(":")[0]}</span>
@@ -638,6 +645,410 @@ function CourseView({ state, currentRep, saveProgress }) {
         </article>
       )}
     </div>
+  );
+}
+
+function DayThreeLesson({ progress, homework, updateHomework, saveProgress }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "Start",
+    "Framework",
+    "Agenda",
+    "Discovery",
+    "Pain",
+    "Workflow",
+    "ROI",
+    "Demo",
+    "Close",
+    "Objections",
+    "Roleplay",
+    "Homework"
+  ];
+  const lastStep = steps.length - 1;
+
+  function goNext() {
+    const nextStep = Math.min(step + 1, lastStep);
+    setStep(nextStep);
+    saveProgress("day3", Math.max(progress, Math.round((nextStep / lastStep) * 75)));
+  }
+
+  function goBack() {
+    setStep(Math.max(step - 1, 0));
+  }
+
+  return (
+    <article className="card lesson-card">
+      <div className="lesson-hero">
+        <div>
+          <span className="eyebrow">Day 3</span>
+          <h3>Full Sales Process + Closing Training</h3>
+          <p>
+            By the end of Day 3, the rep should know how to run a basic sales call, ask discovery
+            questions, uncover pain, show ROI, handle objections, create urgency, and confidently
+            ask for the next step or sale.
+          </p>
+        </div>
+        <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
+      </div>
+
+      <div className="lesson-steps">
+        {steps.map((label, index) => (
+          <button
+            className={index === step ? "active" : ""}
+            key={label}
+            onClick={() => setStep(index)}
+            type="button"
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 ? (
+        <LessonPanel eyebrow="Orientation" title="What Day 3 is really teaching">
+          <p className="lesson-copy">
+            Day 3 turns the rep from appointment setter into someone who can run a real sales
+            conversation. The rep should not dump features, ramble through AI claims, or hope the
+            attorney connects the dots. The rep must control the call, diagnose the workflow, tie
+            Coverable to labor savings, and ask for a clear next step.
+          </p>
+          <div className="agenda-list">
+            {[
+              ["30 min", "Sales call structure", "Full call framework"],
+              ["45 min", "Discovery", "Qualifying and pain questions"],
+              ["45 min", "ROI training", "Labor savings and capacity examples"],
+              ["45 min", "Demo flow", "Present Coverable without feature dumping"],
+              ["45 min", "Closing + objections", "Trial closes, ask, rebuttals"],
+              ["30 min", "Roleplay", "Full sales call simulation"],
+              ["30-60 min", "Homework", "Written call plan + objection responses"]
+            ].map(([time, module, activity]) => (
+              <div className="agenda-item" key={module}>
+                <span>{time}</span>
+                <strong>{module}</strong>
+                <p>{activity}</p>
+              </div>
+            ))}
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <LessonPanel eyebrow="Framework" title="The full Coverable sales call">
+          <p className="lesson-copy">
+            A strong call has a path. The rep knows where the conversation is going, but the
+            attorney still feels heard. This structure keeps the rep from presenting too early and
+            keeps the attorney from drifting into vague objections.
+          </p>
+          <ProcessList
+            items={[
+              "Opener and agenda",
+              "Discovery",
+              "Pain development",
+              "Current workflow review",
+              "ROI framing",
+              "Demo or product explanation",
+              "Fit check",
+              "Objection handling",
+              "Close or next step",
+              "Follow-up confirmation"
+            ]}
+          />
+          <HomeworkField
+            label="In your own words, why does a sales call need a structure?"
+            field="callStructureWhy"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 2 ? (
+        <LessonPanel eyebrow="Step 1" title="Open with agenda and control">
+          <p className="lesson-copy">
+            The opener should lower pressure and raise confidence. You are telling the attorney:
+            this will be organized, relevant, and respectful of their time.
+          </p>
+          <div className="script-box compact-script">
+            <strong>Opener and agenda script</strong>
+            <br />
+            Thanks for taking the time, [Attorney Name]. The goal today is simple. I want to
+            understand how your firm currently handles immigration case prep, drafting, documents,
+            briefs, motions, and supporting materials. Then I will show where Coverable may reduce
+            manual workload. If it looks relevant, we can talk about the best next step. Sound fair?
+          </div>
+          <div className="lesson-grid">
+            <InfoBlock title="Why it works" items={["Sets control.", "Shows respect for time.", "Creates structure.", "Reduces pressure.", "Opens discovery."]} />
+            <InfoBlock title="Rep standard" items={["Do not start with features.", "Do not apologize.", "Do not ask if they still have time.", "Do get agreement on the agenda."]} />
+          </div>
+          <HomeworkField
+            label="Write your agenda opener from memory"
+            field="agendaOpener"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 3 ? (
+        <LessonPanel eyebrow="Step 2" title="Discovery before presenting">
+          <p className="lesson-copy">
+            Discovery earns the right to present. If the rep presents first, the attorney hears a
+            generic pitch. If the rep discovers first, the demo becomes a response to the attorney's
+            actual workflow.
+          </p>
+          <QuestionBank
+            title="Firm qualification questions"
+            questions={[
+              "What types of immigration cases does your firm handle most often?",
+              "Roughly how many active immigration matters does the firm manage per month?",
+              "How many attorneys and paralegals are currently involved in immigration work?",
+              "Who handles most of the document preparation right now?",
+              "What parts of case preparation take the most time?",
+              "Are briefs, motions, declarations, evidence packets, or supporting documents created mostly manually?",
+              "Do you feel your team is at capacity right now?",
+              "Are you trying to grow case volume this year?",
+              "If case volume increased, would you need to hire more staff?",
+              "Who would be involved in approving a tool like this?"
+            ]}
+          />
+          <HomeworkField
+            label="Choose your six discovery questions for a first sales call"
+            field="sixDiscoveryQuestions"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 4 ? (
+        <LessonPanel eyebrow="Step 3" title="Pain questions that make the attorney care">
+          <p className="lesson-copy">
+            Pain questions turn workflow facts into business reasons to act. The rep is listening
+            for wasted hours, bottlenecks, staff overload, delayed cases, hiring pressure, and lost
+            capacity.
+          </p>
+          <QuestionBank
+            title="Pain questions"
+            questions={[
+              "Where does your team lose the most time in case preparation?",
+              "What work do your paralegals complain about most?",
+              "What work do you feel is too repetitive for your attorneys or senior staff?",
+              "How long does it usually take to prepare a full case packet?",
+              "How often do cases get delayed because documents or supporting materials are not ready?",
+              "What happens when paralegals are overloaded?",
+              "Do you ever turn away or delay cases because your team is at capacity?",
+              "What would it mean financially if the firm could handle more cases with the same staff?",
+              "How expensive would it be to solve this by hiring another paralegal?",
+              "If your team saved even a few hours per case, where would that time go?"
+            ]}
+          />
+          <PainSignalDrill homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Step 4" title="Current workflow review">
+          <p className="lesson-copy">
+            The workflow review helps the rep position Coverable correctly. The point is not
+            replacing legal judgment. The point is reducing repetitive preparation around the work
+            that still requires attorney judgment.
+          </p>
+          <div className="script-box compact-script">
+            <strong>Workflow review script</strong>
+            <br />
+            Walk me through what happens after a client signs. From intake to document prep to final
+            case materials, what does your team manually prepare?
+          </div>
+          <div className="lesson-grid">
+            <InfoBlock title="Then ask" items={["Which parts are repeatable?", "Which parts require attorney judgment?", "Which parts are just time-consuming preparation?"]} />
+            <InfoBlock title="Positioning line" items={["It sounds like the opportunity is not replacing legal judgment.", "It is reducing the repetitive preparation work around the judgment."]} />
+          </div>
+          <HomeworkField
+            label="Map the manual workflow you expect at a small immigration firm"
+            field="workflowMap"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 6 ? (
+        <LessonPanel eyebrow="Step 5" title="ROI training">
+          <p className="lesson-copy">
+            ROI should sound simple and concrete. Coverable is not sold as shiny software. It is
+            sold as labor reduction, attorney time saved, increased case capacity, and better margin
+            per matter.
+          </p>
+          <ScriptLibrary
+            scripts={[
+              ["Simple ROI message", "The ROI is not complicated. If your paralegal spends 5-10 hours preparing a case packet, and Coverable reduces that workload significantly, the firm saves labor cost on every case."],
+              ["Capacity message", "If the firm can handle more cases with the same staff, Coverable increases capacity without increasing payroll."],
+              ["Business message", "The sale is not about buying software. It is about reducing labor, saving attorney time, and increasing case volume."],
+              ["Labor hours saved", "Let us say your paralegal spends 8 hours preparing a case packet. If Coverable saves even 3 hours, and you do that across 20 cases per month, that is 60 staff hours saved monthly."],
+              ["Avoiding a new hire", "If your team is close to capacity, the normal solution is hiring another paralegal. Coverable may help delay or reduce the need for another hire by increasing output from the team you already have."],
+              ["More cases with same staff", "If your team can move cases faster, the firm may be able to take on more volume without adding payroll. That is where the margin improvement comes from."],
+              ["Attorney time saved", "Even if the attorney only saves a few hours per week, that time can go back into client strategy, consultations, reviews, or revenue-producing work."],
+              ["Profit per case", "Every hour of staff time attached to a case affects profit. If Coverable reduces the hours required per matter, the firm keeps more margin per case."]
+            ]}
+          />
+          <RoiBuilder homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 7 ? (
+        <LessonPanel eyebrow="Step 6" title="Demo flow without feature dumping">
+          <p className="lesson-copy">
+            A rep should not demo every feature. The demo should be tied to the attorney's pain.
+            Every screen shown should answer a problem the attorney already admitted.
+          </p>
+          <ProcessList
+            items={[
+              "Restate pain",
+              "Show relevant workflow",
+              "Connect feature to time savings",
+              "Ask for reaction",
+              "Move to ROI or next step"
+            ]}
+          />
+          <div className="script-box compact-script">
+            <strong>Demo opening script</strong>
+            <br />
+            Based on what you told me, the biggest issue is the time your team spends preparing
+            documents and supporting materials. I will focus the demo there instead of showing you
+            every feature.
+          </div>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="During demo"
+              items={[
+                "This is where your paralegal would normally spend time gathering and preparing materials.",
+                "This is the type of repetitive drafting Coverable is designed to reduce.",
+                "The attorney still reviews and controls the final work product.",
+                "This is where firms usually see the time savings."
+              ]}
+            />
+            <InfoBlock
+              title="After demo ask"
+              items={[
+                "Where would this save your team the most time?",
+                "Does this fit any of the work your staff is currently doing manually?",
+                "If this saved your team a few hours per case, would that be meaningful?"
+              ]}
+            />
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 8 ? (
+        <LessonPanel eyebrow="Steps 7-8" title="Trial closes and closing scripts">
+          <p className="lesson-copy">
+            Trial closes test interest before the final ask. Closing is not a magic line. It is the
+            natural next step after the rep has created pain, shown value, handled concerns, and
+            confirmed fit.
+          </p>
+          <QuestionBank
+            title="Trial close questions"
+            questions={[
+              "Does this look relevant to your workflow?",
+              "Could you see your paralegals using this?",
+              "Would reducing that prep time be valuable for the firm?",
+              "Is this something you would want to test on a real case?",
+              "Assuming the platform works the way I showed you, what would stop you from moving forward?"
+            ]}
+          />
+          <ScriptLibrary
+            scripts={[
+              ["Soft close", "Based on what you shared, this seems like it could reduce a meaningful amount of manual prep time. The best next step is to test it on one real matter and see how much time it saves your team."],
+              ["Direct close", "This looks like a fit. Let us get you set up so your team can test it on an active case."],
+              ["Pilot close", "Rather than debating it in theory, let us run a short pilot. Use Coverable on a real case, measure the time saved, and then decide if it should become part of your workflow."],
+              ["Decision close", "What would you need to see to feel comfortable moving forward?"],
+              ["Calendar close", "Let us schedule the implementation/trial setup now while we are both here. Are you better [Day/Time] or [Day/Time]?"],
+              ["Final ask", "Do you want to move forward and test this with your team?"]
+            ]}
+          />
+          <HomeworkField
+            label="Write the close you would use after a strong demo"
+            field="preferredClose"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 9 ? (
+        <LessonPanel eyebrow="Objections" title="Common attorney objections and rebuttals">
+          <p className="lesson-copy">
+            Objections are not personal. They usually mean the attorney has not connected the value
+            to their workflow, risk concern, timing, or cost. The rep should acknowledge, reframe,
+            ask a question, and move back toward the next step.
+          </p>
+          <AttorneyObjectionDrill homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 10 ? (
+        <LessonPanel eyebrow="Roleplay" title="20-minute full sales call simulation">
+          <p className="lesson-copy">
+            Scenario: the attorney owns a small immigration firm with 2 attorneys, 3 paralegals, a
+            high caseload, manual document prep, some skepticism about AI, and concern about cost.
+          </p>
+          <div className="lesson-grid">
+            <InfoBlock
+              title="Rep must accomplish"
+              items={[
+                "Open with agenda.",
+                "Ask at least 6 discovery questions.",
+                "Identify pain.",
+                "Explain ROI.",
+                "Present Coverable clearly.",
+                "Handle at least 2 objections.",
+                "Ask for next step."
+              ]}
+            />
+            <InfoBlock
+              title="Manager grading"
+              items={[
+                "Did the rep ask before presenting?",
+                "Did the rep uncover real workflow pain?",
+                "Did ROI sound concrete?",
+                "Did the rep avoid feature dumping?",
+                "Did the rep ask directly for a next step?"
+              ]}
+            />
+          </div>
+          <DayThreeQuiz homework={homework} updateHomework={updateHomework} />
+        </LessonPanel>
+      ) : null}
+
+      {step === 11 ? (
+        <LessonPanel eyebrow="Homework" title="Finish Day 3">
+          <p className="lesson-copy">
+            Passing standard: the rep should score 80% or higher on the quiz, write a full
+            discovery call plan, prepare 10 objection responses, and record a 5-minute ROI
+            explanation before Day 4 live call simulations.
+          </p>
+          <div className="homework-grid">
+            <HomeworkField label="Full discovery call script" field="fullDiscoveryScript" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="10 objection rebuttals" field="tenObjectionRebuttals" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Link or note for recorded 5-minute ROI explanation" field="roiRecording" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Day 4 prep: phone, LinkedIn, email, and text scripts reviewed" field="day4Prep" homework={homework} updateHomework={updateHomework} />
+          </div>
+          <button className="button" type="button" onClick={() => saveProgress("day3", 100)}>
+            Mark Day 3 Complete
+          </button>
+        </LessonPanel>
+      ) : null}
+
+      <div className="lesson-controls">
+        <button className="ghost" type="button" onClick={goBack} disabled={step === 0}>
+          Back
+        </button>
+        <button className="button" type="button" onClick={goNext} disabled={step === lastStep}>
+          Next
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -1543,6 +1954,211 @@ function GatekeeperRebuttalDrill({ homework, updateHomework }) {
   );
 }
 
+function ProcessList({ items }) {
+  return (
+    <div className="process-list">
+      {items.map((item, index) => (
+        <div className="process-step" key={item}>
+          <span>{index + 1}</span>
+          <strong>{item}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuestionBank({ title, questions }) {
+  return (
+    <div className="question-bank">
+      <strong>{title}</strong>
+      <div>
+        {questions.map((question) => (
+          <span key={question}>{question}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PainSignalDrill({ homework, updateHomework }) {
+  const signals = [
+    ["Paralegals are overloaded", "Ask what gets delayed and what hiring would cost."],
+    ["Packets take too long", "Ask how many hours per case and how many cases per month."],
+    ["Attorney reviews are backed up", "Ask what lower-value prep is stealing attorney time."],
+    ["Firm wants more volume", "Ask whether current staff can support growth without bottlenecks."]
+  ];
+
+  return (
+    <div className="drill-stack">
+      {signals.map(([signal, response]) => (
+        <div className="drill-card" key={signal}>
+          <span>Pain signal</span>
+          <strong>{signal}</strong>
+          <p>{response}</p>
+        </div>
+      ))}
+      <HomeworkField
+        label="Pick one pain signal and write the follow-up question you would ask"
+        field="painSignalFollowup"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function RoiBuilder({ homework, updateHomework }) {
+  const hours = Number(homework.roiHoursSaved || 3);
+  const cases = Number(homework.roiCases || 20);
+  const monthly = Number.isFinite(hours * cases) ? hours * cases : 0;
+
+  return (
+    <div className="roi-builder">
+      <div className="script-builder">
+        <label>
+          Hours saved per case
+          <input
+            min="0"
+            type="number"
+            value={homework.roiHoursSaved || ""}
+            onChange={(event) => updateHomework("roiHoursSaved", event.target.value)}
+            placeholder="3"
+          />
+        </label>
+        <label>
+          Cases per month
+          <input
+            min="0"
+            type="number"
+            value={homework.roiCases || ""}
+            onChange={(event) => updateHomework("roiCases", event.target.value)}
+            placeholder="20"
+          />
+        </label>
+      </div>
+      <div className="script-box compact-script">
+        <strong>Your ROI math</strong>
+        <br />
+        If Coverable saves {hours || "[hours]"} hours per case across {cases || "[cases]"} cases per
+        month, that is {monthly || "[total]"} staff hours saved monthly.
+      </div>
+      <HomeworkField
+        label="Write a plain-English ROI explanation using this math"
+        field="roiExplanation"
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
+function AttorneyObjectionDrill({ homework, updateHomework }) {
+  const [active, setActive] = useState("sendInfo");
+  const objections = {
+    sendInfo: {
+      label: "Send me information",
+      response:
+        "I can send information, but most of the value depends on your workflow. A generic PDF will not show whether this saves your team time. Let us do a quick 10-15 minute walkthrough, and then I will send details that actually match your firm. Short version: I can, but it will make more sense after a quick walkthrough. Are you open tomorrow for 15 minutes?",
+      field: "day3ObjSendInfo"
+    },
+    software: {
+      label: "We already have software",
+      response:
+        "That makes sense. Most firms already have case management software. Coverable is different because it focuses on reducing repetitive drafting, document preparation, briefs, motions, and case materials. Are those still being prepared manually by your team?",
+      field: "day3ObjSoftware"
+    },
+    busy: {
+      label: "I'm too busy",
+      response:
+        "I figured you would be. That is actually why this may be relevant. If your team is buried in manual case prep, this is designed to reduce that workload. I am only asking for 10-15 minutes to see if it applies. Stronger version: Busy firms are usually the ones where this makes the most sense. Would tomorrow morning or afternoon be better for a short walkthrough?",
+      field: "day3ObjBusy"
+    },
+    notInterested: {
+      label: "Not interested",
+      response:
+        "Understood. Before I let you go, is that because you already have AI handling document prep, or because this just is not a priority right now? If not a priority: Fair. When paralegal workload or case volume becomes more of a bottleneck, this may be worth revisiting. Would it be unreasonable to send a short overview and follow up next month?",
+      field: "day3ObjNotInterested"
+    },
+    aiTrust: {
+      label: "I do not trust AI",
+      response:
+        "That is a fair concern. Coverable is not meant to replace attorney judgment. The attorney still reviews and controls the final work. The value is reducing the repetitive preparation and drafting burden before final review. If your team still had full review control, would saving time on the first draft and preparation side be useful?",
+      field: "day3ObjAiTrust"
+    },
+    officeManager: {
+      label: "Talk to my office manager",
+      response:
+        "Absolutely. I am happy to speak with them. Since this affects legal drafting and case preparation, usually the attorney needs to be involved at least briefly. Should I include both of you on the walkthrough?",
+      field: "day3ObjOfficeManager"
+    },
+    paralegals: {
+      label: "We have paralegals for that",
+      response:
+        "Exactly. Coverable is designed to make those paralegals more productive. This is not about replacing them. It is about helping them get through repetitive preparation work faster so they can handle more cases and higher-value tasks.",
+      field: "day3ObjParalegals"
+    },
+    cost: {
+      label: "How much does it cost?",
+      response:
+        "The pricing depends on the firm's usage and workflow. The better way to look at it is cost versus hours saved. If your team saves even a few hours per case, the software can pay for itself quickly. Let me ask - about how many cases per month would this apply to?",
+      field: "day3ObjCost"
+    },
+    expensive: {
+      label: "It sounds expensive",
+      response:
+        "Compared to doing nothing, maybe. Compared to hiring another paralegal or losing hours on every case, it is usually very reasonable. The real question is whether the time savings justify it for your firm.",
+      field: "day3ObjExpensive"
+    },
+    smallFirm: {
+      label: "We are a small firm",
+      response:
+        "That may actually make it more relevant. Smaller firms usually feel staff bottlenecks faster because every hour matters. If Coverable helps your current team handle more without hiring, that can be a big advantage.",
+      field: "day3ObjSmallFirm"
+    },
+    think: {
+      label: "We need to think about it",
+      response:
+        "Of course. What specifically would you want to think through - cost, workflow fit, accuracy, team adoption, or something else? If we solve that concern, would you be comfortable moving forward with a pilot?",
+      field: "day3ObjThink"
+    },
+    later: {
+      label: "Follow up later",
+      response:
+        "I can do that. To make the follow-up useful, what would need to change between now and then - more case volume, staff capacity, budget timing, or internal review? Let us put a real follow-up date on the calendar instead of leaving it vague.",
+      field: "day3ObjLater"
+    }
+  };
+  const current = objections[active];
+
+  return (
+    <div className="drill-stack">
+      <div className="segmented-buttons">
+        {Object.entries(objections).map(([key, item]) => (
+          <button
+            className={active === key ? "active" : ""}
+            key={key}
+            onClick={() => setActive(key)}
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="script-box compact-script">
+        <strong>Rebuttal</strong>
+        <br />
+        {current.response}
+      </div>
+      <HomeworkField
+        label={`Write your version: ${current.label}`}
+        field={current.field}
+        homework={homework}
+        updateHomework={updateHomework}
+      />
+    </div>
+  );
+}
+
 function DayTwoQuiz({ homework, updateHomework }) {
   const questions = [
     "What is the goal of a gatekeeper call?",
@@ -1563,6 +2179,36 @@ function DayTwoQuiz({ homework, updateHomework }) {
       {questions.map((question, index) => (
         <HomeworkField
           field={`day2Quiz${index}`}
+          homework={homework}
+          key={question}
+          label={question}
+          updateHomework={updateHomework}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DayThreeQuiz({ homework, updateHomework }) {
+  const questions = [
+    "What are the steps of a Coverable sales call?",
+    "Why should reps ask discovery questions before presenting?",
+    "Name five pain questions.",
+    "Give one ROI example.",
+    "How should reps respond to \"We already have software\"?",
+    "How should reps respond to \"I do not trust AI\"?",
+    "What is a trial close?",
+    "Give two trial close questions.",
+    "What is the difference between a soft close and direct close?",
+    "What should the rep do after the call?"
+  ];
+
+  return (
+    <div className="quiz-stack">
+      <span className="eyebrow">Quiz - passing score 80%</span>
+      {questions.map((question, index) => (
+        <HomeworkField
+          field={`day3Quiz${index}`}
           homework={homework}
           key={question}
           label={question}

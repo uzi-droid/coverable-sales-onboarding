@@ -718,6 +718,67 @@ textarea {
   flex-wrap: wrap;
 }
 
+.process-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.process-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.process-step span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #111315;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.process-step strong {
+  font-size: 14px;
+}
+
+.question-bank {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.question-bank div {
+  display: grid;
+  gap: 8px;
+}
+
+.question-bank span {
+  border-radius: 8px;
+  padding: 10px 11px;
+  color: var(--ink);
+  background: rgba(17, 19, 21, 0.06);
+  line-height: 1.4;
+}
+
+.roi-builder {
+  display: grid;
+  gap: 12px;
+}
+
 .quote-list span {
   border-radius: 999px;
   padding: 6px 10px;
