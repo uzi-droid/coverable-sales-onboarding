@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { bootcampDays, initialState, objectionBank } from "@/lib/demoData";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -416,7 +416,14 @@ export default function SalesCommandApp() {
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
         ) : null}
         {state.activeView === "course" ? (
-          <CourseView state={state} currentRep={currentRep} saveProgress={saveProgress} />
+          <CourseView
+            configured={configured}
+            currentRep={currentRep}
+            saveProgress={saveProgress}
+            session={session}
+            setNotice={setNotice}
+            state={state}
+          />
         ) : null}
         {state.activeView === "coach" ? <CoachView /> : null}
       </main>
@@ -573,20 +580,92 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
   );
 }
 
-function CourseView({ state, currentRep, saveProgress }) {
+function CourseView({ configured, state, currentRep, saveProgress, session, setNotice }) {
   const [activeDayId, setActiveDayId] = useState("day1");
   const [homework, setHomework] = useState({});
+  const [answerSaveStatus, setAnswerSaveStatus] = useState("");
+  const saveTimer = useRef(null);
   const homeworkKey = `coverable-homework-${currentRep.id}-${activeDayId}`;
 
   useEffect(() => {
+    let active = true;
     const saved = window.localStorage.getItem(homeworkKey);
-    setHomework(saved ? JSON.parse(saved) : {});
-  }, [homeworkKey]);
+    const localAnswers = safeParseJson(saved);
+    setHomework(localAnswers);
+    setAnswerSaveStatus(saved ? "Saved on this device" : "");
+
+    async function loadSavedAnswers() {
+      if (!configured || !session) return;
+      const supabase = createBrowserSupabaseClient();
+      const { data, error } = await supabase
+        .from("course_answers")
+        .select("answers")
+        .eq("user_id", session.user.id)
+        .eq("module_id", activeDayId)
+        .maybeSingle();
+
+      if (!active) return;
+      if (error) {
+        if (isMissingCourseAnswersTable(error)) {
+          setAnswerSaveStatus("Answers are saving on this device until the Supabase answers table is added.");
+          return;
+        }
+        setNotice(error.message);
+        return;
+      }
+
+      if (data?.answers) {
+        setHomework(data.answers);
+        window.localStorage.setItem(homeworkKey, JSON.stringify(data.answers));
+        setAnswerSaveStatus("Saved to account");
+      }
+    }
+
+    loadSavedAnswers();
+
+    return () => {
+      active = false;
+      window.clearTimeout(saveTimer.current);
+    };
+  }, [activeDayId, configured, homeworkKey, session, setNotice]);
 
   function updateHomework(field, value) {
     const next = { ...homework, [field]: value };
     setHomework(next);
     window.localStorage.setItem(homeworkKey, JSON.stringify(next));
+    setAnswerSaveStatus(configured && session ? "Saving..." : "Saved on this device");
+
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveCourseAnswers(activeDayId, next);
+    }, 550);
+  }
+
+  async function saveCourseAnswers(moduleId, answers) {
+    if (!configured || !session) return;
+
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.from("course_answers").upsert(
+      {
+        user_id: session.user.id,
+        module_id: moduleId,
+        answers,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "user_id,module_id" }
+    );
+
+    if (error) {
+      if (isMissingCourseAnswersTable(error)) {
+        setAnswerSaveStatus("Saved on this device. Add the Supabase answers table to sync across devices.");
+        return;
+      }
+      setAnswerSaveStatus("Could not sync. Saved on this device.");
+      setNotice(error.message);
+      return;
+    }
+
+    setAnswerSaveStatus("Saved to account");
   }
 
   const activeDay = bootcampDays.find((day) => day.id === activeDayId) || bootcampDays[0];
@@ -658,6 +737,8 @@ function CourseView({ state, currentRep, saveProgress }) {
           </button>
         </article>
       )}
+
+      {answerSaveStatus ? <span className="save-status">{answerSaveStatus}</span> : null}
     </div>
   );
 }
@@ -3502,6 +3583,20 @@ function withTimeout(promise, message, timeoutMs = REQUEST_TIMEOUT_MS) {
       window.setTimeout(() => reject(new Error(message)), timeoutMs);
     })
   ]);
+}
+
+function safeParseJson(value) {
+  if (!value) return {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function isMissingCourseAnswersTable(error) {
+  const message = error?.message || "";
+  return error?.code === "42P01" || error?.code === "PGRST205" || message.includes("course_answers");
 }
 
 function viewTitle(view) {
