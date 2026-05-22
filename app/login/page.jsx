@@ -28,7 +28,10 @@ export default function LoginPage() {
         ? await supabase.auth.signUp({
             email,
             password,
-            options: { data: { full_name: fullName.trim() } }
+            options: {
+              data: { full_name: fullName.trim() },
+              emailRedirectTo: `${window.location.origin}/auth/callback`
+            }
           })
         : await supabase.auth.signInWithPassword({ email, password });
 

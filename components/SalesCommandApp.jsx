@@ -31,13 +31,23 @@ export default function SalesCommandApp() {
   const [mounted, setMounted] = useState(false);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(configured);
+  const [loadingSlow, setLoadingSlow] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    let slowTimer;
+    if (configured) {
+      slowTimer = window.setTimeout(() => {
+        setLoadingSlow(true);
+        setNotice("Still loading. If this does not clear, sign out and sign in again.");
+      }, 8000);
+    }
+
     if (!configured) {
       setState(loadDemoState());
       setMounted(true);
       setLoading(false);
+      window.clearTimeout(slowTimer);
       return;
     }
 
@@ -50,6 +60,8 @@ export default function SalesCommandApp() {
       if (data.session) await loadLiveState(supabase, data.session.user.id);
       setMounted(true);
       setLoading(false);
+      setLoadingSlow(false);
+      window.clearTimeout(slowTimer);
     }
 
     boot();
@@ -61,11 +73,16 @@ export default function SalesCommandApp() {
       if (nextSession) await loadLiveState(supabase, nextSession.user.id);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(slowTimer);
+      subscription.unsubscribe();
+    };
   }, [configured]);
 
   async function loadLiveState(supabase, currentUserId) {
     setNotice("");
+
+    await ensureProfile(supabase);
 
     const [{ data: profiles, error: profileError }, { data: progress, error: progressError }, { data: crm, error: crmError }] =
       await Promise.all([
@@ -90,6 +107,20 @@ export default function SalesCommandApp() {
       initials: initialsFor(profile.full_name || profile.email),
       startDate: profile.start_date
     }));
+
+    if (!reps.some((rep) => rep.id === currentUserId)) {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (user) {
+        reps.push({
+          id: user.id,
+          name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
+          email: user.email,
+          initials: initialsFor(user.user_metadata?.full_name || user.email || "New Rep"),
+          startDate: new Date().toISOString().slice(0, 10)
+        });
+      }
+    }
 
     const progressByRep = {};
     reps.forEach((rep) => {
@@ -208,7 +239,7 @@ export default function SalesCommandApp() {
   const rankedReps = useMemo(() => rankReps(state), [state]);
   const currentStats = currentRep ? getRepStats(state, currentRep.id) : getEmptyStats();
 
-  if (!mounted || loading) return <LoadingShell />;
+  if (!mounted || loading) return <LoadingShell slow={loadingSlow} notice={notice} />;
 
   if (configured && !session) return <LoginRequired />;
 
@@ -595,7 +626,23 @@ function Field({ label, children, wide }) {
   );
 }
 
-function LoadingShell() {
+async function ensureProfile(supabase) {
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
+  if (!user) return;
+
+  await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
+      email: user.email,
+      role: "rep"
+    },
+    { onConflict: "id" }
+  );
+}
+
+function LoadingShell({ slow, notice }) {
   return (
     <main className="login-page">
       <section className="login-panel">
@@ -606,7 +653,12 @@ function LoadingShell() {
             <span>Loading sales floor</span>
           </div>
         </div>
-        <div className="notice">Loading your workspace...</div>
+        <div className="loading-block">
+          <div className="loading-bar" />
+          <div className="notice">
+            {slow ? notice || "Still loading your workspace..." : "Loading your workspace..."}
+          </div>
+        </div>
       </section>
     </main>
   );
