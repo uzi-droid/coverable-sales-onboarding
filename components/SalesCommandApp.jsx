@@ -635,6 +635,27 @@ function CourseView({ state, currentRep, saveProgress }) {
 }
 
 function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "Start",
+    "Standards",
+    "Reality",
+    "Explain",
+    "Practice",
+    "Homework"
+  ];
+  const lastStep = steps.length - 1;
+
+  function goNext() {
+    const nextStep = Math.min(step + 1, lastStep);
+    setStep(nextStep);
+    saveProgress("day1", Math.max(progress, Math.round((nextStep / lastStep) * 75)));
+  }
+
+  function goBack() {
+    setStep(Math.max(step - 1, 0));
+  }
+
   return (
     <article className="card lesson-card">
       <div className="lesson-hero">
@@ -650,30 +671,54 @@ function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
         <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
       </div>
 
-      <LessonSection title="Agenda">
-        <div className="agenda-list">
-          {[
-            ["30 min", "Bootcamp expectations", "Sales mindset, rules, standards"],
-            ["45 min", "Product understanding", "What Coverable does and how to explain it"],
-            ["45 min", "Law firm pain points", "Attorney/paralegal workflow training"],
-            ["30 min", "Sales basics", "Control, confidence, questions, next steps"],
-            ["30 min", "Script practice", "10-sec, 20-sec, and attorney-friendly explanations"],
-            ["30 min", "Quiz + roleplay", "Product explanation test"],
-            ["30-60 min", "Homework", "Written pitch + pain-point mapping"]
-          ].map(([time, module, activity]) => (
-            <div className="agenda-item" key={module}>
-              <span>{time}</span>
-              <strong>{module}</strong>
-              <p>{activity}</p>
-            </div>
-          ))}
-        </div>
-      </LessonSection>
+      <div className="lesson-steps">
+        {steps.map((label, index) => (
+          <button
+            className={index === step ? "active" : ""}
+            key={label}
+            onClick={() => setStep(index)}
+            type="button"
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <LessonSection title="Module 1: Bootcamp Expectations">
-        <div className="lesson-grid">
-          <InfoBlock
-            title="Rep Standards"
+      {step === 0 ? (
+        <LessonPanel eyebrow="Orientation" title="What today is really about">
+          <p className="lesson-copy">
+            Day 1 is not about memorizing a fancy AI pitch. It is about becoming useful on the
+            phone. By the end, you should be able to explain Coverable simply, connect it to law
+            firm pain, and avoid rambling when a busy attorney gives you 15 seconds.
+          </p>
+          <div className="agenda-list">
+            {[
+              ["30 min", "Bootcamp expectations", "Sales mindset, rules, standards"],
+              ["45 min", "Product understanding", "What Coverable does and how to explain it"],
+              ["45 min", "Law firm pain points", "Attorney/paralegal workflow training"],
+              ["30 min", "Sales basics", "Control, confidence, questions, next steps"],
+              ["30 min", "Script practice", "10-sec, 20-sec, and attorney-friendly explanations"],
+              ["30 min", "Quiz + roleplay", "Product explanation test"],
+              ["30-60 min", "Homework", "Written pitch + pain-point mapping"]
+            ].map(([time, module, activity]) => (
+              <div className="agenda-item" key={module}>
+                <span>{time}</span>
+                <strong>{module}</strong>
+                <p>{activity}</p>
+              </div>
+            ))}
+          </div>
+        </LessonPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <LessonPanel eyebrow="Module 1" title="The rep standard">
+          <p className="lesson-copy">
+            Coverable reps should sound prepared, sharp, and calm. You are not asking permission to
+            bother someone. You are opening a relevant business conversation.
+          </p>
+          <ChecklistInteraction
             items={[
               "Show up prepared.",
               "Know the scripts.",
@@ -684,203 +729,183 @@ function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
               "Ask for the next step confidently."
             ]}
           />
-          <InfoBlock
-            title="Sales Reality"
-            items={[
-              "Sales is about creating useful conversations with qualified prospects.",
-              "A weak rep hears one objection and quits.",
-              "A strong rep treats the first objection as the start of the conversation."
-            ]}
-          />
-        </div>
-        <QuoteList
-          title="Reps will hear"
-          items={[
-            "Not interested.",
-            "Send me information.",
-            "We are too busy.",
-            "We already have software.",
-            "The attorney is unavailable.",
-            "Call back later."
-          ]}
-        />
-      </LessonSection>
+        </LessonPanel>
+      ) : null}
 
-      <LessonSection title="Module 2: What Coverable Does">
-        <InfoBlock
-          title="Rep Explanation Framework"
-          items={["Who it helps", "What problem it solves", "What it does", "Business result"]}
-        />
-        <div className="script-box compact-script">
-          <strong>Formula</strong>
-          <br />
-          We help [type of firm] reduce [pain] by [solution], so they can [business result].
-        </div>
-        <div className="compare-grid">
-          <div className="compare-card bad">
-            <strong>Bad</strong>
-            <p>We are an AI platform that uses advanced technology to help lawyers automate things.</p>
-            <ul>
-              <li>Too vague</li>
-              <li>Too tech-heavy</li>
-              <li>No business pain</li>
-              <li>No attorney workflow</li>
-            </ul>
-          </div>
-          <div className="compare-card good">
-            <strong>Good</strong>
-            <p>
-              Coverable helps immigration firms cut down the hours spent on repetitive document
-              prep and legal drafting, so paralegals and attorneys can move cases faster.
-            </p>
-            <ul>
-              <li>Simple</li>
-              <li>Direct</li>
-              <li>Pain-based</li>
-              <li>Business-focused</li>
-            </ul>
-          </div>
-        </div>
-      </LessonSection>
-
-      <LessonSection title="Module 3: How Attorneys Think">
-        <p className="lesson-copy">
-          Attorneys are busy, skeptical, and protective of their time. They are trained to question
-          claims. They do not want hype.
-        </p>
-        <div className="lesson-grid">
-          <InfoBlock
-            title="What Attorneys Respond To"
+      {step === 2 ? (
+        <LessonPanel eyebrow="Module 1" title="Sales reality">
+          <p className="lesson-copy">
+            Sales is not about being liked by everyone. Sales is about creating useful conversations
+            with qualified prospects. The first objection is usually not the end of the call. It is
+            where the call actually begins.
+          </p>
+          <QuoteList
+            title="You will hear"
             items={[
-              "Specificity",
-              "Confidence",
-              "Professionalism",
-              "Risk awareness",
-              "Practical value",
-              "Time savings",
-              "Better staff productivity",
-              "Clear next steps"
+              "Not interested.",
+              "Send me information.",
+              "We are too busy.",
+              "We already have software.",
+              "The attorney is unavailable.",
+              "Call back later."
             ]}
           />
-          <InfoBlock
-            title="What Attorneys Ignore"
-            items={[
-              "Generic AI pitches",
-              "Long explanations",
-              "Overly casual language",
-              "Pushy desperation",
-              "Vague claims",
-              "Just checking in follow-ups"
-            ]}
-          />
-        </div>
-        <QuoteList
-          title="Attorney mindset"
-          items={[
-            "Is this worth my time?",
-            "Is this relevant to my practice?",
-            "Will this create risk?",
-            "Will this actually save my staff time?",
-            "Is this person wasting my day?"
-          ]}
-        />
-      </LessonSection>
-
-      <LessonSection title="Module 4: Sales Basics for New Reps">
-        <div className="lesson-grid">
-          <InfoBlock
-            title="5 Rules of Sales Control"
-            items={[
-              "Lead with a clear reason for the call.",
-              "Ask focused questions.",
-              "Do not overexplain.",
-              "Handle objections with confidence.",
-              "Always move toward a next step."
-            ]}
-          />
-          <InfoBlock
-            title="Correct Sales Posture"
-            items={[
-              "I have something relevant that may help your firm.",
-              "I only need a short conversation to see if it makes sense.",
-              "Do not act like you are begging for time."
-            ]}
-          />
-        </div>
-        <div className="agenda-list mistakes">
-          {[
-            ["Talking too much", "The attorney loses interest."],
-            ["Sounding unsure", "The prospect assumes the product is not serious."],
-            ["Overexplaining early", "The prospect says send info to escape."],
-            ["Folding after one objection", "No appointment gets booked."]
-          ].map(([mistake, reason]) => (
-            <div className="agenda-item" key={mistake}>
-              <strong>{mistake}</strong>
-              <p>{reason}</p>
+          <div className="compare-grid">
+            <div className="compare-card bad">
+              <strong>Weak rep</strong>
+              <p>Hears one objection, apologizes, and exits the conversation.</p>
             </div>
-          ))}
-        </div>
-      </LessonSection>
-
-      <LessonSection title="Script Practice">
-        <div className="script-stack">
-          {[
-            ["10-Second Explanation", "Coverable helps immigration law firms prepare documents and case materials faster using AI, so attorneys and paralegals spend less time on repetitive work."],
-            ["20-Second Explanation", "Coverable is legal AI software for law firms, especially immigration firms. It helps generate and organize documents, briefs, motions, and case materials faster, which saves paralegal time, reduces attorney workload, and helps the firm handle more cases with the same staff."],
-            ["Pain-Based Explanation", "Most immigration firms have staff spending hours on repeatable drafting, forms, briefs, and case packets. Coverable helps reduce that manual workload so the firm can move cases faster without immediately adding payroll."],
-            ["ROI-Based Explanation", "If your team saves even a few hours per case, that adds up quickly. Coverable is about reducing labor hours per case and increasing how many cases the firm can handle with the same team."]
-          ].map(([title, text]) => (
-            <div className="script-box compact-script" key={title}>
-              <strong>{title}</strong>
-              <br />
-              {text}
+            <div className="compare-card good">
+              <strong>Strong rep</strong>
+              <p>Stays calm, asks one better question, and moves toward a next step.</p>
             </div>
-          ))}
-        </div>
-      </LessonSection>
+          </div>
+        </LessonPanel>
+      ) : null}
 
-      <LessonSection title="Roleplay + Quiz">
-        <div className="lesson-grid">
+      {step === 3 ? (
+        <LessonPanel eyebrow="Module 2" title="Explain Coverable without rambling">
           <InfoBlock
-            title="Explain Coverable 3 Ways"
-            items={["To an attorney", "To a paralegal", "To an office manager"]}
+            title="Use this order"
+            items={["Who it helps", "What problem it solves", "What it does", "Business result"]}
           />
-          <InfoBlock
-            title="Manager Grading"
-            items={["Clarity", "Confidence", "Relevance", "Brevity", "Business value"]}
-          />
-        </div>
-        <InfoBlock
-          title="Quiz"
-          items={[
-            "What type of firms does Coverable mainly help?",
-            "What are three pain points immigration law firms commonly face?",
-            "Why should reps avoid pitching Coverable as just AI software?",
-            "What is the 20-second explanation of Coverable?",
-            "What does reducing labor hours per case mean?",
-            "Why do attorneys dislike vague sales pitches?",
-            "What is the difference between being persistent and being pushy?",
-            "Name three things attorneys care about when considering software.",
-            "What is the rep's goal on an initial cold call?",
-            "Why is overexplaining dangerous before the demo?"
-          ]}
-        />
-        <span className="pill">Passing score: 80% or higher</span>
-      </LessonSection>
+          <div className="script-box compact-script">
+            <strong>Formula</strong>
+            <br />
+            We help [type of firm] reduce [pain] by [solution], so they can [business result].
+          </div>
+          <div className="script-builder">
+            <label>
+              Type of firm
+              <input
+                value={homework.firmType || ""}
+                onChange={(event) => updateHomework("firmType", event.target.value)}
+                placeholder="immigration law firms"
+              />
+            </label>
+            <label>
+              Pain
+              <input
+                value={homework.pain || ""}
+                onChange={(event) => updateHomework("pain", event.target.value)}
+                placeholder="repetitive drafting and case prep"
+              />
+            </label>
+            <label>
+              Solution
+              <input
+                value={homework.solution || ""}
+                onChange={(event) => updateHomework("solution", event.target.value)}
+                placeholder="AI that generates and organizes case materials faster"
+              />
+            </label>
+            <label>
+              Business result
+              <input
+                value={homework.result || ""}
+                onChange={(event) => updateHomework("result", event.target.value)}
+                placeholder="save staff time and handle more cases"
+              />
+            </label>
+          </div>
+          <div className="script-box compact-script">
+            <strong>Your sentence</strong>
+            <br />
+            We help {homework.firmType || "[type of firm]"} reduce {homework.pain || "[pain]"} by{" "}
+            {homework.solution || "[solution]"}, so they can {homework.result || "[business result]"}.
+          </div>
+        </LessonPanel>
+      ) : null}
 
-      <LessonSection title="Homework">
-        <div className="homework-grid">
-          <HomeworkField label="Coverable's value in one sentence" field="oneSentence" homework={homework} updateHomework={updateHomework} />
-          <HomeworkField label="Coverable's value in three sentences" field="threeSentences" homework={homework} updateHomework={updateHomework} />
-          <HomeworkField label="Five law firm pain points" field="painPoints" homework={homework} updateHomework={updateHomework} />
-          <HomeworkField label="One ROI example using time saved per case" field="roiExample" homework={homework} updateHomework={updateHomework} />
-          <HomeworkField label="Link or note for recorded 20-second explanation" field="recording" homework={homework} updateHomework={updateHomework} />
-        </div>
-        <button className="button" type="button" onClick={() => saveProgress("day1", 100)}>
-          Mark Day 1 Complete
+      {step === 4 ? (
+        <LessonPanel eyebrow="Practice" title="Good pitch vs bad pitch">
+          <div className="compare-grid">
+            <div className="compare-card bad">
+              <strong>Bad</strong>
+              <p>We are an AI platform that uses advanced technology to help lawyers automate things.</p>
+              <ul>
+                <li>Too vague</li>
+                <li>Too tech-heavy</li>
+                <li>Does not explain business pain</li>
+                <li>Does not connect to attorney workflow</li>
+              </ul>
+            </div>
+            <div className="compare-card good">
+              <strong>Good</strong>
+              <p>
+                Coverable helps immigration firms cut down the hours spent on repetitive document
+                prep and legal drafting, so paralegals and attorneys can move cases faster.
+              </p>
+              <ul>
+                <li>Simple</li>
+                <li>Direct</li>
+                <li>Pain-based</li>
+                <li>Business-focused</li>
+              </ul>
+            </div>
+          </div>
+          <HomeworkField
+            label="Write your best 20-second explanation"
+            field="practicePitch"
+            homework={homework}
+            updateHomework={updateHomework}
+          />
+        </LessonPanel>
+      ) : null}
+
+      {step === 5 ? (
+        <LessonPanel eyebrow="Homework" title="Finish Day 1">
+          <div className="homework-grid">
+            <HomeworkField label="Coverable's value in one sentence" field="oneSentence" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Coverable's value in three sentences" field="threeSentences" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Five law firm pain points" field="painPoints" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="One ROI example using time saved per case" field="roiExample" homework={homework} updateHomework={updateHomework} />
+            <HomeworkField label="Link or note for recorded 20-second explanation" field="recording" homework={homework} updateHomework={updateHomework} />
+          </div>
+          <button className="button" type="button" onClick={() => saveProgress("day1", 100)}>
+            Mark Day 1 Complete
+          </button>
+        </LessonPanel>
+      ) : null}
+
+      <div className="lesson-controls">
+        <button className="ghost" type="button" onClick={goBack} disabled={step === 0}>
+          Back
         </button>
-      </LessonSection>
+        <button className="button" type="button" onClick={goNext} disabled={step === lastStep}>
+          Next
+        </button>
+      </div>
     </article>
+  );
+}
+
+function LessonPanel({ eyebrow, title, children }) {
+  return (
+    <section className="lesson-panel">
+      <span className="eyebrow">{eyebrow}</span>
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+function ChecklistInteraction({ items }) {
+  const [checked, setChecked] = useState({});
+
+  return (
+    <div className="interactive-checklist">
+      {items.map((item) => (
+        <label key={item}>
+          <input
+            checked={Boolean(checked[item])}
+            onChange={(event) => setChecked({ ...checked, [item]: event.target.checked })}
+            type="checkbox"
+          />
+          <span>{item}</span>
+        </label>
+      ))}
+    </div>
   );
 }
 

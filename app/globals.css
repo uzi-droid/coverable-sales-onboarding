@@ -445,6 +445,45 @@ textarea {
   max-width: 1060px;
 }
 
+.lesson-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lesson-steps button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.45);
+  font-weight: 800;
+}
+
+.lesson-steps button.active {
+  color: #ffffff;
+  background: #111315;
+}
+
+.lesson-steps span {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 19, 21, 0.09);
+  font-size: 12px;
+}
+
+.lesson-steps button.active span {
+  color: #111315;
+  background: #ffffff;
+}
+
 .lesson-hero {
   display: flex;
   align-items: flex-start;
@@ -472,6 +511,69 @@ textarea {
   gap: 12px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
+}
+
+.lesson-panel {
+  display: grid;
+  gap: 14px;
+  min-height: 430px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.lesson-panel h4 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.04;
+}
+
+.interactive-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.interactive-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  font-weight: 750;
+}
+
+.interactive-checklist input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.script-builder {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.script-builder label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.lesson-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lesson-controls button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .lesson-section h4 {
@@ -902,9 +1004,11 @@ tr:last-child td {
   .grid.four,
   .home-grid,
   .day-grid,
+  .lesson-steps,
   .lesson-grid,
   .compare-grid,
   .homework-grid,
+  .script-builder,
   .coach-grid {
     grid-template-columns: 1fr;
   }
