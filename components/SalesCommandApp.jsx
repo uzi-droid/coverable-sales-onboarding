@@ -391,6 +391,7 @@ export default function SalesCommandApp() {
           <div>
             <div className="eyebrow">{liveMode ? "Live rep mode" : "Demo mode"} / {currentRep?.name}</div>
             <h2>{viewTitle(state.activeView)}</h2>
+            <p>{viewSubtitle(state.activeView)}</p>
           </div>
           <div className="quick-actions">
             <button className="ghost" onClick={() => updateState((draft) => ({ ...draft, activeView: "crm" }))}>
