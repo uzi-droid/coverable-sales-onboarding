@@ -574,35 +574,357 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
 }
 
 function CourseView({ state, currentRep, saveProgress }) {
+  const [activeDayId, setActiveDayId] = useState("day1");
+  const [homework, setHomework] = useState({});
+  const homeworkKey = `coverable-homework-${currentRep.id}-day1`;
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(homeworkKey);
+    setHomework(saved ? JSON.parse(saved) : {});
+  }, [homeworkKey]);
+
+  function updateHomework(field, value) {
+    const next = { ...homework, [field]: value };
+    setHomework(next);
+    window.localStorage.setItem(homeworkKey, JSON.stringify(next));
+  }
+
+  const activeDay = bootcampDays.find((day) => day.id === activeDayId) || bootcampDays[0];
+
   return (
-    <div className="course-list">
-      {bootcampDays.map((day) => {
-        const value = state.progress[currentRep.id]?.[day.id] || 0;
-        const complete = value === 100;
-        const nextValue = value >= 75 ? 100 : value + 25;
-        return (
-          <article className="card training-card" key={day.id}>
-            <div className="course-row">
-              <div className="course-day">{day.title.split(":")[0]}</div>
-              <div>
-                <h4>{day.title.replace(`${day.title.split(":")[0]}: `, "")}</h4>
-                <p className="small">{day.focus}</p>
-              </div>
-              <span className={complete ? "status done" : "status"}>{complete ? "Done" : `${value}%`}</span>
-            </div>
-            <div className="script-box compact-script">{day.script}</div>
-            <div className="progress-track" style={{ "--progress": `${value}%` }}>
-              <div className="progress-fill" />
-            </div>
-            <div className="module-actions">
-              <button className={complete ? "ghost" : "button"} type="button" onClick={() => saveProgress(day.id, complete ? 75 : nextValue)}>
-                {complete ? "Reopen" : nextValue === 100 ? "Finish" : "Continue"}
-              </button>
-            </div>
-          </article>
-        );
-      })}
+    <div className="course-page">
+      <div className="day-grid">
+        {bootcampDays.map((day) => {
+          const value = state.progress[currentRep.id]?.[day.id] || 0;
+          const complete = value === 100;
+          return (
+            <button
+              className={`day-box ${activeDayId === day.id ? "active" : ""}`}
+              key={day.id}
+              onClick={() => setActiveDayId(day.id)}
+              type="button"
+            >
+              <span>{day.title.split(":")[0]}</span>
+              <strong>{day.title.replace(`${day.title.split(":")[0]}: `, "")}</strong>
+              <em>{complete ? "Done" : `${value}%`}</em>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeDay.id === "day1" ? (
+        <DayOneLesson
+          progress={state.progress[currentRep.id]?.day1 || 0}
+          homework={homework}
+          updateHomework={updateHomework}
+          saveProgress={saveProgress}
+        />
+      ) : (
+        <article className="card course-placeholder">
+          <span className="eyebrow">{activeDay.title.split(":")[0]}</span>
+          <h3>{activeDay.title.replace(`${activeDay.title.split(":")[0]}: `, "")}</h3>
+          <p>{activeDay.focus}</p>
+          <div className="script-box compact-script">{activeDay.script}</div>
+          <button className="ghost" type="button">
+            Coming next
+          </button>
+        </article>
+      )}
     </div>
+  );
+}
+
+function DayOneLesson({ progress, homework, updateHomework, saveProgress }) {
+  return (
+    <article className="card lesson-card">
+      <div className="lesson-hero">
+        <div>
+          <span className="eyebrow">Day 1</span>
+          <h3>Sales Foundation + Product Understanding</h3>
+          <p>
+            By the end of Day 1, the rep should understand what Coverable does, who it serves,
+            what law firm problems it solves, and how to explain the product clearly without
+            rambling.
+          </p>
+        </div>
+        <span className={progress === 100 ? "status done" : "status"}>{progress === 100 ? "Done" : `${progress}%`}</span>
+      </div>
+
+      <LessonSection title="Agenda">
+        <div className="agenda-list">
+          {[
+            ["30 min", "Bootcamp expectations", "Sales mindset, rules, standards"],
+            ["45 min", "Product understanding", "What Coverable does and how to explain it"],
+            ["45 min", "Law firm pain points", "Attorney/paralegal workflow training"],
+            ["30 min", "Sales basics", "Control, confidence, questions, next steps"],
+            ["30 min", "Script practice", "10-sec, 20-sec, and attorney-friendly explanations"],
+            ["30 min", "Quiz + roleplay", "Product explanation test"],
+            ["30-60 min", "Homework", "Written pitch + pain-point mapping"]
+          ].map(([time, module, activity]) => (
+            <div className="agenda-item" key={module}>
+              <span>{time}</span>
+              <strong>{module}</strong>
+              <p>{activity}</p>
+            </div>
+          ))}
+        </div>
+      </LessonSection>
+
+      <LessonSection title="Module 1: Bootcamp Expectations">
+        <div className="lesson-grid">
+          <InfoBlock
+            title="Rep Standards"
+            items={[
+              "Show up prepared.",
+              "Know the scripts.",
+              "Practice out loud.",
+              "Take coaching without excuses.",
+              "Track activity daily.",
+              "Stay composed under rejection.",
+              "Ask for the next step confidently."
+            ]}
+          />
+          <InfoBlock
+            title="Sales Reality"
+            items={[
+              "Sales is about creating useful conversations with qualified prospects.",
+              "A weak rep hears one objection and quits.",
+              "A strong rep treats the first objection as the start of the conversation."
+            ]}
+          />
+        </div>
+        <QuoteList
+          title="Reps will hear"
+          items={[
+            "Not interested.",
+            "Send me information.",
+            "We are too busy.",
+            "We already have software.",
+            "The attorney is unavailable.",
+            "Call back later."
+          ]}
+        />
+      </LessonSection>
+
+      <LessonSection title="Module 2: What Coverable Does">
+        <InfoBlock
+          title="Rep Explanation Framework"
+          items={["Who it helps", "What problem it solves", "What it does", "Business result"]}
+        />
+        <div className="script-box compact-script">
+          <strong>Formula</strong>
+          <br />
+          We help [type of firm] reduce [pain] by [solution], so they can [business result].
+        </div>
+        <div className="compare-grid">
+          <div className="compare-card bad">
+            <strong>Bad</strong>
+            <p>We are an AI platform that uses advanced technology to help lawyers automate things.</p>
+            <ul>
+              <li>Too vague</li>
+              <li>Too tech-heavy</li>
+              <li>No business pain</li>
+              <li>No attorney workflow</li>
+            </ul>
+          </div>
+          <div className="compare-card good">
+            <strong>Good</strong>
+            <p>
+              Coverable helps immigration firms cut down the hours spent on repetitive document
+              prep and legal drafting, so paralegals and attorneys can move cases faster.
+            </p>
+            <ul>
+              <li>Simple</li>
+              <li>Direct</li>
+              <li>Pain-based</li>
+              <li>Business-focused</li>
+            </ul>
+          </div>
+        </div>
+      </LessonSection>
+
+      <LessonSection title="Module 3: How Attorneys Think">
+        <p className="lesson-copy">
+          Attorneys are busy, skeptical, and protective of their time. They are trained to question
+          claims. They do not want hype.
+        </p>
+        <div className="lesson-grid">
+          <InfoBlock
+            title="What Attorneys Respond To"
+            items={[
+              "Specificity",
+              "Confidence",
+              "Professionalism",
+              "Risk awareness",
+              "Practical value",
+              "Time savings",
+              "Better staff productivity",
+              "Clear next steps"
+            ]}
+          />
+          <InfoBlock
+            title="What Attorneys Ignore"
+            items={[
+              "Generic AI pitches",
+              "Long explanations",
+              "Overly casual language",
+              "Pushy desperation",
+              "Vague claims",
+              "Just checking in follow-ups"
+            ]}
+          />
+        </div>
+        <QuoteList
+          title="Attorney mindset"
+          items={[
+            "Is this worth my time?",
+            "Is this relevant to my practice?",
+            "Will this create risk?",
+            "Will this actually save my staff time?",
+            "Is this person wasting my day?"
+          ]}
+        />
+      </LessonSection>
+
+      <LessonSection title="Module 4: Sales Basics for New Reps">
+        <div className="lesson-grid">
+          <InfoBlock
+            title="5 Rules of Sales Control"
+            items={[
+              "Lead with a clear reason for the call.",
+              "Ask focused questions.",
+              "Do not overexplain.",
+              "Handle objections with confidence.",
+              "Always move toward a next step."
+            ]}
+          />
+          <InfoBlock
+            title="Correct Sales Posture"
+            items={[
+              "I have something relevant that may help your firm.",
+              "I only need a short conversation to see if it makes sense.",
+              "Do not act like you are begging for time."
+            ]}
+          />
+        </div>
+        <div className="agenda-list mistakes">
+          {[
+            ["Talking too much", "The attorney loses interest."],
+            ["Sounding unsure", "The prospect assumes the product is not serious."],
+            ["Overexplaining early", "The prospect says send info to escape."],
+            ["Folding after one objection", "No appointment gets booked."]
+          ].map(([mistake, reason]) => (
+            <div className="agenda-item" key={mistake}>
+              <strong>{mistake}</strong>
+              <p>{reason}</p>
+            </div>
+          ))}
+        </div>
+      </LessonSection>
+
+      <LessonSection title="Script Practice">
+        <div className="script-stack">
+          {[
+            ["10-Second Explanation", "Coverable helps immigration law firms prepare documents and case materials faster using AI, so attorneys and paralegals spend less time on repetitive work."],
+            ["20-Second Explanation", "Coverable is legal AI software for law firms, especially immigration firms. It helps generate and organize documents, briefs, motions, and case materials faster, which saves paralegal time, reduces attorney workload, and helps the firm handle more cases with the same staff."],
+            ["Pain-Based Explanation", "Most immigration firms have staff spending hours on repeatable drafting, forms, briefs, and case packets. Coverable helps reduce that manual workload so the firm can move cases faster without immediately adding payroll."],
+            ["ROI-Based Explanation", "If your team saves even a few hours per case, that adds up quickly. Coverable is about reducing labor hours per case and increasing how many cases the firm can handle with the same team."]
+          ].map(([title, text]) => (
+            <div className="script-box compact-script" key={title}>
+              <strong>{title}</strong>
+              <br />
+              {text}
+            </div>
+          ))}
+        </div>
+      </LessonSection>
+
+      <LessonSection title="Roleplay + Quiz">
+        <div className="lesson-grid">
+          <InfoBlock
+            title="Explain Coverable 3 Ways"
+            items={["To an attorney", "To a paralegal", "To an office manager"]}
+          />
+          <InfoBlock
+            title="Manager Grading"
+            items={["Clarity", "Confidence", "Relevance", "Brevity", "Business value"]}
+          />
+        </div>
+        <InfoBlock
+          title="Quiz"
+          items={[
+            "What type of firms does Coverable mainly help?",
+            "What are three pain points immigration law firms commonly face?",
+            "Why should reps avoid pitching Coverable as just AI software?",
+            "What is the 20-second explanation of Coverable?",
+            "What does reducing labor hours per case mean?",
+            "Why do attorneys dislike vague sales pitches?",
+            "What is the difference between being persistent and being pushy?",
+            "Name three things attorneys care about when considering software.",
+            "What is the rep's goal on an initial cold call?",
+            "Why is overexplaining dangerous before the demo?"
+          ]}
+        />
+        <span className="pill">Passing score: 80% or higher</span>
+      </LessonSection>
+
+      <LessonSection title="Homework">
+        <div className="homework-grid">
+          <HomeworkField label="Coverable's value in one sentence" field="oneSentence" homework={homework} updateHomework={updateHomework} />
+          <HomeworkField label="Coverable's value in three sentences" field="threeSentences" homework={homework} updateHomework={updateHomework} />
+          <HomeworkField label="Five law firm pain points" field="painPoints" homework={homework} updateHomework={updateHomework} />
+          <HomeworkField label="One ROI example using time saved per case" field="roiExample" homework={homework} updateHomework={updateHomework} />
+          <HomeworkField label="Link or note for recorded 20-second explanation" field="recording" homework={homework} updateHomework={updateHomework} />
+        </div>
+        <button className="button" type="button" onClick={() => saveProgress("day1", 100)}>
+          Mark Day 1 Complete
+        </button>
+      </LessonSection>
+    </article>
+  );
+}
+
+function LessonSection({ title, children }) {
+  return (
+    <section className="lesson-section">
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+function InfoBlock({ title, items }) {
+  return (
+    <div className="info-block">
+      <strong>{title}</strong>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function QuoteList({ title, items }) {
+  return (
+    <div className="quote-list">
+      <strong>{title}</strong>
+      <div>
+        {items.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HomeworkField({ label, field, homework, updateHomework }) {
+  return (
+    <label className="homework-field">
+      <span>{label}</span>
+      <textarea value={homework[field] || ""} onChange={(event) => updateHomework(field, event.target.value)} />
+    </label>
   );
 }
 
