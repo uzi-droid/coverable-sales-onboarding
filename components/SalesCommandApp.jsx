@@ -276,7 +276,6 @@ export default function SalesCommandApp() {
           <div>
             <div className="eyebrow">{liveMode ? "Live rep mode" : "Demo mode"} / {currentRep?.name}</div>
             <h2>{viewTitle(state.activeView)}</h2>
-            <p>{viewSubtitle(state.activeView)}</p>
           </div>
           <div className="quick-actions">
             <button className="ghost" onClick={() => updateState((draft) => ({ ...draft, activeView: "crm" }))}>
@@ -302,7 +301,12 @@ export default function SalesCommandApp() {
         {notice ? <div className="notice">{notice}</div> : null}
 
         {state.activeView === "team" ? (
-          <TeamView state={state} rankedReps={rankedReps} currentStats={currentStats} />
+          <TeamView
+            state={state}
+            rankedReps={rankedReps}
+            currentStats={currentStats}
+            setActiveView={(view) => updateState((draft) => ({ ...draft, activeView: view }))}
+          />
         ) : null}
         {state.activeView === "crm" ? (
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
@@ -316,62 +320,62 @@ export default function SalesCommandApp() {
   );
 }
 
-function TeamView({ state, rankedReps, currentStats }) {
+function TeamView({ state, rankedReps, currentStats, setActiveView }) {
+  const nextTask = nextCourseTask(state, currentStats);
+
   return (
     <>
-      <div className="grid four">
-        <Metric label="My onboarding" value={`${currentStats.onboarding}%`} detail="Course completion" />
-        <Metric label="My CRM records" value={currentStats.calls} detail="Sales touches logged" />
-        <Metric label="My demos booked" value={currentStats.demos} detail="Qualified opportunities" />
-        <Metric label="My closed clients" value={currentStats.closed} detail="Deals and pilots" />
-      </div>
-
-      <div className="section-title">
-        <h3>Sales Floor</h3>
-        <span className="pill">Everyone can see the race</span>
-      </div>
-
-      <div className="grid two">
-        <article className="card">
-          <h4>Rep Progress</h4>
-          {rankedReps.length ? (
-            rankedReps.map((rep, index) => (
-              <div className="leader-row" key={rep.id}>
-                <div className="rank">{index + 1}</div>
-                <div>
-                  <div className="rep-name">{rep.name}</div>
-                  <div className="small">
-                    {rep.onboarding}% course, {rep.calls} CRM records, {rep.demos} demos
-                  </div>
-                  <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
-                    <div className="progress-fill" />
-                  </div>
-                </div>
-                <div className="score">{rep.score}</div>
-              </div>
-            ))
-          ) : (
-            <div className="empty">No reps yet. Create an account to start the board.</div>
-          )}
+      <div className="home-grid">
+        <article className="card focus-card">
+          <div>
+            <span className="eyebrow">Next</span>
+            <h3>{nextTask.title}</h3>
+            <p>{nextTask.detail}</p>
+          </div>
+          <button className="button" type="button" onClick={() => setActiveView(nextTask.view)}>
+            {nextTask.action}
+          </button>
         </article>
 
-        <article className="card">
-          <h4>What Feeds This Page</h4>
-          <ul className="compact-list">
-            <li>Course progress comes from completed onboarding modules.</li>
-            <li>Sales stats come from CRM activity logged by each rep.</li>
-            <li>Demos, follow-ups, and closed clients earn more points than raw calls.</li>
-            <li>Everyone sees the scoreboard, so activity turns into momentum.</li>
-          </ul>
-          <div className="script-box">
-            First milestone: reps can log in, log activity, and see where they stand against the
-            team from real database data.
+        <article className="card score-card">
+          <span className="eyebrow">My Score</span>
+          <strong>{currentStats.score}</strong>
+          <div className="small">
+            {currentStats.onboarding}% course / {currentStats.demos} demos / {currentStats.closed} closed
           </div>
         </article>
       </div>
 
       <div className="section-title">
-        <h3>Latest Sales Activity</h3>
+        <h3>Team</h3>
+      </div>
+
+      <article className="card">
+        {rankedReps.length ? (
+          rankedReps.map((rep, index) => (
+            <div className="leader-row minimal" key={rep.id}>
+              <div className="rank">{index + 1}</div>
+              <div>
+                <div className="rep-name">{rep.name}</div>
+                <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
+                  <div className="progress-fill" />
+                </div>
+              </div>
+              <div className="rep-stats">
+                <strong>{rep.score}</strong>
+                <span>{rep.onboarding}%</span>
+                <span>{rep.demos} demos</span>
+                <span>{rep.closed} closed</span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty">No reps yet. Create an account to start the board.</div>
+        )}
+      </article>
+
+      <div className="section-title">
+        <h3>Recent Activity</h3>
         <span className="pill">{state.crm.length} records</span>
       </div>
       <CrmTable state={state} entries={state.crm.slice(0, 6)} />
@@ -467,32 +471,29 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
 
 function CourseView({ state, currentRep, saveProgress }) {
   return (
-    <div className="grid two">
+    <div className="course-list">
       {bootcampDays.map((day) => {
         const value = state.progress[currentRep.id]?.[day.id] || 0;
+        const complete = value === 100;
+        const nextValue = value >= 75 ? 100 : value + 25;
         return (
           <article className="card training-card" key={day.id}>
-            <div>
-              <span className="pill">{value}% complete</span>
-              <h4>{day.title}</h4>
-              <p className="small">{day.focus}</p>
+            <div className="course-row">
+              <div className="course-day">{day.title.split(":")[0]}</div>
+              <div>
+                <h4>{day.title.replace(`${day.title.split(":")[0]}: `, "")}</h4>
+                <p className="small">{day.focus}</p>
+              </div>
+              <span className={complete ? "status done" : "status"}>{complete ? "Done" : `${value}%`}</span>
             </div>
-            <ul>{day.activities.map((activity) => <li key={activity}>{activity}</li>)}</ul>
-            <div className="script-box">{day.script}</div>
+            <div className="script-box compact-script">{day.script}</div>
             <div className="progress-track" style={{ "--progress": `${value}%` }}>
               <div className="progress-fill" />
             </div>
             <div className="module-actions">
-              {[0, 25, 50, 75, 100].map((amount) => (
-                <button
-                  className="ghost"
-                  key={amount}
-                  type="button"
-                  onClick={() => saveProgress(day.id, amount)}
-                >
-                  {amount}%
-                </button>
-              ))}
+              <button className={complete ? "ghost" : "button"} type="button" onClick={() => saveProgress(day.id, complete ? 75 : nextValue)}>
+                {complete ? "Reopen" : nextValue === 100 ? "Finish" : "Continue"}
+              </button>
             </div>
           </article>
         );
@@ -687,4 +688,25 @@ function viewSubtitle(view) {
     course: "Work through the Coverable bootcamp with interactive progress tracking.",
     coach: "Practice scripts and objections before live calls."
   }[view];
+}
+
+function nextCourseTask(state, currentStats) {
+  if (currentStats.onboarding >= 100) {
+    return {
+      title: "Keep the board moving",
+      detail: "Log today's calls, demos, and follow-ups.",
+      action: "Open CRM",
+      view: "crm"
+    };
+  }
+
+  const currentRepId = state.currentRepId;
+  const progress = state.progress[currentRepId] || {};
+  const nextDay = bootcampDays.find((day) => (progress[day.id] || 0) < 100) || bootcampDays[0];
+  return {
+    title: nextDay.title,
+    detail: nextDay.focus,
+    action: "Continue",
+    view: "course"
+  };
 }
