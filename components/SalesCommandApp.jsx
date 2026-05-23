@@ -237,7 +237,7 @@ export default function SalesCommandApp() {
     if (!configured || !session) {
       updateState((draft) => ({ ...draft, crm: [entry, ...draft.crm] }));
       form.reset();
-      return;
+      return true;
     }
 
     const supabase = createBrowserSupabaseClient();
@@ -269,11 +269,12 @@ export default function SalesCommandApp() {
 
     if (error) {
       setNotice(error.message);
-      return;
+      return false;
     }
 
     form.reset();
     await loadLiveState(supabase, session.user.id);
+    return true;
   }
 
   async function saveProgress(moduleId, amount) {
@@ -490,19 +491,40 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
         )}
       </article>
 
-      <div className="section-title">
-        <h3>Recent Activity</h3>
-      </div>
-      <CrmTable state={state} entries={state.crm.slice(0, 6)} />
+      <TeamResults state={state} entries={state.crm} />
     </>
   );
 }
 
 function CrmView({ state, currentRep, saveCrmEntry }) {
+  const [showEntry, setShowEntry] = useState(false);
+  const [search, setSearch] = useState("");
+  const [stage, setStage] = useState("All");
+  const [channel, setChannel] = useState("All");
+  const [selectedId, setSelectedId] = useState("");
   const entries = state.crm.filter((entry) => entry.repId === currentRep.id);
   const stats = getRepStats(state, currentRep.id);
+  const stages = ["All", "Call Logged", "Attorney Reached", "Demo Booked", "Follow-up", "Closed", "No Answer", "Not Interested"];
+  const channels = ["All", "Phone", "Email", "LinkedIn", "Text", "Demo"];
+  const query = search.trim().toLowerCase();
+  const filteredEntries = entries.filter((entry) => {
+    const matchesStage = stage === "All" || entry.outcome === stage;
+    const matchesChannel = channel === "All" || entry.channel === channel;
+    const matchesSearch =
+      !query ||
+      [entry.firm, entry.contact, entry.outcome, entry.channel, entry.notes, entry.objection]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    return matchesStage && matchesChannel && matchesSearch;
+  });
+  const followUps = entries
+    .filter((entry) => entry.nextFollowUp && entry.outcome !== "Closed")
+    .sort((first, second) => first.nextFollowUp.localeCompare(second.nextFollowUp))
+    .slice(0, 3);
+  const selectedEntry = entries.find((entry) => entry.id === selectedId);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const saleAmount = Number(form.get("saleAmount") || 0);
@@ -523,20 +545,40 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
       createdAt: new Date().toISOString().slice(0, 10)
     };
 
-    saveCrmEntry(entry, event.currentTarget);
+    const saved = await saveCrmEntry(entry, event.currentTarget);
+    if (saved) setShowEntry(false);
   }
 
   return (
-    <>
-      <div className="crm-summary-grid">
-        <Metric label="Calls" value={stats.calls} />
-        <Metric label="Demos" value={stats.demos} />
-        <Metric label="Closed" value={stats.closed} />
-        <Metric label="Revenue" value={formatMoney(stats.revenue)} />
+    <div className="crm-page">
+      <div className="crm-head">
+        <div className="crm-summary-grid">
+          <Metric label="Activity" value={stats.calls} />
+          <Metric label="Demos" value={stats.demos} />
+          <Metric label="Closed" value={stats.closed} />
+          <Metric label="Revenue" value={formatMoney(stats.revenue)} />
+        </div>
+        <button className="button crm-new" onClick={() => setShowEntry((open) => !open)} type="button">
+          {showEntry ? "Close" : "New activity"}
+        </button>
       </div>
 
-      <article className="card">
-        <form className="crm-form" onSubmit={handleSubmit}>
+      {followUps.length ? (
+        <section className="crm-followups">
+          <h3>Next</h3>
+          {followUps.map((entry) => (
+            <button className="followup-item" key={entry.id} onClick={() => setSelectedId(entry.id)} type="button">
+              <span>{formatShortDate(entry.nextFollowUp)}</span>
+              <strong>{entry.firm}</strong>
+              <em>{entry.outcome}</em>
+            </button>
+          ))}
+        </section>
+      ) : null}
+
+      {showEntry ? (
+        <article className="card crm-entry-card">
+          <form className="crm-form" onSubmit={handleSubmit}>
           <Field label="Firm">
             <input name="firm" required />
           </Field>
@@ -598,14 +640,35 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
           <button className="button crm-submit" type="submit">
             Add
           </button>
-        </form>
-      </article>
+          </form>
+        </article>
+      ) : null}
 
-      <div className="section-title">
-        <h3>Activity</h3>
-      </div>
-      <CrmTable state={state} entries={entries} />
-    </>
+      <section className="crm-ledger">
+        <div className="crm-toolbar">
+          <input
+            aria-label="Search activity"
+            className="crm-search"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search"
+            value={search}
+          />
+          <select aria-label="Filter stage" onChange={(event) => setStage(event.target.value)} value={stage}>
+            {stages.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
+          </select>
+          <select aria-label="Filter channel" onChange={(event) => setChannel(event.target.value)} value={channel}>
+            {channels.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <CrmTable entries={filteredEntries} onSelect={setSelectedId} selectedId={selectedId} />
+      </section>
+
+      {selectedEntry ? <CrmDetail entry={selectedEntry} onClose={() => setSelectedId("")} /> : null}
+    </div>
   );
 }
 
@@ -3534,55 +3597,120 @@ function HomeworkField({ label, field, homework, updateHomework }) {
   );
 }
 
-function CrmTable({ state, entries }) {
+function TeamResults({ state, entries }) {
+  const results = entries
+    .filter((entry) => entry.outcome === "Closed" || entry.outcome === "Demo Booked")
+    .slice(0, 4);
+
+  if (!results.length) return null;
+
+  return (
+    <section className="team-results">
+      {results.map((entry) => {
+        const rep = state.reps.find((item) => item.id === entry.repId);
+        return (
+          <div className="result-row" key={entry.id}>
+            <div>
+              <strong>{entry.firm}</strong>
+              <span>{rep?.name || "Rep"}</span>
+            </div>
+            <span className="status">{entry.outcome === "Demo Booked" ? "Demo" : "Closed"}</span>
+            {entry.outcome === "Closed" && entry.saleAmount ? (
+              <strong className="result-value">{formatMoney(entry.saleAmount)}</strong>
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function CrmTable({ entries, onSelect, selectedId }) {
   if (!entries.length) return <div className="empty">No activity</div>;
   return (
-    <div className="table-wrap">
-      <table>
+    <div className="table-wrap crm-table-wrap">
+      <table className="crm-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Rep</th>
             <th>Firm</th>
-            <th>Contact</th>
-            <th>Outcome</th>
+            <th>Stage</th>
             <th>Channel</th>
-            <th>Sale</th>
-            <th>Term</th>
-            <th>Close</th>
-            <th>Next</th>
-            <th>Notes</th>
+            <th>Value</th>
+            <th>Follow-up</th>
+            <th>Date</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry) => {
-            const rep = state.reps.find((item) => item.id === entry.repId);
-            return (
-              <tr key={entry.id}>
-                <td>{entry.createdAt}</td>
-                <td>{rep?.name || "Unknown"}</td>
-                <td>{entry.firm}</td>
-                <td>
-                  {entry.contact}
-                  <div className="small">{entry.contactRole}</div>
-                </td>
-                <td>
-                  <span className="status">{entry.outcome}</span>
-                </td>
-                <td>{entry.channel}</td>
-                <td className="money-cell">{entry.saleAmount ? formatMoney(entry.saleAmount) : "-"}</td>
-                <td>{entry.contractTerm || "-"}</td>
-                <td>{entry.closeDate || "-"}</td>
-                <td>{entry.nextFollowUp || "None"}</td>
-                <td>
-                  {entry.notes}
-                  {entry.objection ? <div className="small">Objection: {entry.objection}</div> : null}
-                </td>
-              </tr>
-            );
-          })}
+          {entries.map((entry) => (
+            <tr className={selectedId === entry.id ? "selected" : ""} key={entry.id}>
+              <td>
+                <strong>{entry.firm}</strong>
+                <div className="small">{entry.contact}</div>
+              </td>
+              <td>
+                <span className="status">{entry.outcome}</span>
+              </td>
+              <td>{entry.channel}</td>
+              <td className="money-cell">{entry.saleAmount ? formatMoney(entry.saleAmount) : "-"}</td>
+              <td>{entry.nextFollowUp ? formatShortDate(entry.nextFollowUp) : "-"}</td>
+              <td>{formatShortDate(entry.createdAt)}</td>
+              <td>
+                <button className="row-action" onClick={() => onSelect(entry.id)} type="button">
+                  View
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function CrmDetail({ entry, onClose }) {
+  return (
+    <aside className="crm-detail card">
+      <div className="crm-detail-head">
+        <div>
+          <h3>{entry.firm}</h3>
+          <span className="small">
+            {entry.contact} / {entry.contactRole}
+          </span>
+        </div>
+        <button aria-label="Close detail" className="row-action" onClick={onClose} type="button">
+          Close
+        </button>
+      </div>
+      <div className="crm-detail-grid">
+        <DetailItem label="Stage" value={entry.outcome} />
+        <DetailItem label="Channel" value={entry.channel} />
+        <DetailItem label="Value" value={entry.saleAmount ? formatMoney(entry.saleAmount) : "-"} />
+        <DetailItem label="Term" value={entry.contractTerm || "-"} />
+        <DetailItem label="Closed" value={entry.closeDate ? formatShortDate(entry.closeDate) : "-"} />
+        <DetailItem label="Follow-up" value={entry.nextFollowUp ? formatShortDate(entry.nextFollowUp) : "-"} />
+      </div>
+      {entry.objection ? (
+        <div className="crm-detail-note">
+          <span>Objection</span>
+          <p>{entry.objection}</p>
+        </div>
+      ) : null}
+      {entry.notes ? (
+        <div className="crm-detail-note">
+          <span>Notes</span>
+          <p>{entry.notes}</p>
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div className="detail-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -3661,7 +3789,9 @@ function getRepStats(state, repId) {
   const closed = entries.filter((entry) => entry.outcome === "Closed").length;
   const followUps = entries.filter((entry) => entry.outcome === "Follow-up").length;
   const attorneyReached = entries.filter((entry) => entry.outcome === "Attorney Reached").length;
-  const revenue = entries.reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
+  const revenue = entries
+    .filter((entry) => entry.outcome === "Closed")
+    .reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
   const score = calls * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 100 + Math.round(revenue / 100) + onboarding;
   return { calls, demos, closed, followUps, onboarding, revenue, score };
 }
@@ -3691,6 +3821,12 @@ function formatMoney(value) {
     currency: "USD",
     maximumFractionDigits: 0
   }).format(Number(value || 0));
+}
+
+function formatShortDate(value) {
+  if (!value) return "-";
+  const date = new Date(`${value}T00:00:00`);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 }
 
 function profileFromUser(user) {
