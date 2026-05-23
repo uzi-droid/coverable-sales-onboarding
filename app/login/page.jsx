@@ -38,17 +38,12 @@ export default function LoginPage() {
       <section className="login-panel">
         <div className="brand compact">
           <div className="mark">C</div>
-          <div>
-            <h1>Coverable Command</h1>
-            <span>Sales onboarding login</span>
-          </div>
+          <h1>Coverable</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div>
-            <div className="eyebrow">Rep access</div>
-            <h2>Sign in to your sales floor</h2>
-            <p>Use your rep account to save CRM activity, onboarding progress, and sales-floor ranking.</p>
+            <h2>Sign in</h2>
           </div>
 
           <div className="field">
@@ -74,7 +69,6 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               required
               minLength={6}
-              placeholder="Minimum 6 characters"
             />
           </div>
 

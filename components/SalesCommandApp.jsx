@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { bootcampDays, initialState, objectionBank } from "@/lib/demoData";
+import { bootcampDays, initialState } from "@/lib/demoData";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "coverable-sales-command-next-v1";
@@ -325,6 +325,10 @@ export default function SalesCommandApp() {
     state.reps.find((rep) => rep.id === (liveMode ? session.user.id : state.currentRepId)) || state.reps[0];
   const rankedReps = useMemo(() => rankReps(state), [state]);
   const currentStats = currentRep ? getRepStats(state, currentRep.id) : getEmptyStats();
+  const activeView =
+    state.activeView === "coach" || (state.activeView === "admin" && currentRep?.role !== "admin")
+      ? "team"
+      : state.activeView;
 
   if (!mounted || loading) return <LoadingShell slow={loadingSlow} notice={notice} />;
 
@@ -335,17 +339,10 @@ export default function SalesCommandApp() {
       <aside className="sidebar">
         <div className="brand">
           <div className="mark">C</div>
-          <div>
-            <h1>Coverable Command</h1>
-            <span>Rep sales cockpit</span>
-          </div>
+          <h1>Coverable</h1>
         </div>
 
-        {liveMode ? (
-          <div className="sidebar-note compact-note">
-            Signed in as <strong>{currentRep?.name || session.user.email}</strong>
-          </div>
-        ) : (
+        {!liveMode ? (
           <div className="account-switcher">
             <label htmlFor="rep">Demo rep</label>
             <select
@@ -362,62 +359,44 @@ export default function SalesCommandApp() {
               ))}
             </select>
           </div>
-        )}
+        ) : null}
 
         <nav className="nav">
           {[
-            ["team", "Team", "Pulse"],
-            ["crm", "CRM", "Log"],
-            ["course", "Course", "Learn"],
-            ["coach", "Coach", "Drill"],
-            ...(currentRep?.role === "admin" ? [["admin", "Admin", "Manage"]] : [])
-          ].map(([id, label, hint]) => (
+            ["team", "Team"],
+            ["crm", "CRM"],
+            ["course", "Course"],
+            ...(currentRep?.role === "admin" ? [["admin", "Admin"]] : [])
+          ].map(([id, label]) => (
             <button
               key={id}
-              className={state.activeView === id ? "active" : ""}
+              className={activeView === id ? "active" : ""}
               onClick={() => updateState((draft) => ({ ...draft, activeView: id }))}
             >
               {label}
-              <span>{hint}</span>
             </button>
           ))}
         </nav>
 
-        <div className="sidebar-note">
-          {liveMode
-            ? "Live Supabase mode: CRM activity and onboarding progress are stored online."
-            : "Demo mode is active until Supabase env vars are added."}
+        <div className="sidebar-actions">
+          {liveMode ? (
+            <button className="ghost" onClick={signOut} type="button">
+              Sign out
+            </button>
+          ) : (
+            <>
+              <a className="ghost" href="/login">
+                Login
+              </a>
+              <button className="ghost" onClick={() => updateState(cloneInitialState())} type="button">
+                Reset
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
       <main className="main">
-        <section className="topbar">
-          <div>
-            <div className="eyebrow">{liveMode ? "Live rep mode" : "Demo mode"} / {currentRep?.name}</div>
-            <h2>{viewTitle(state.activeView)}</h2>
-            <p>{viewSubtitle(state.activeView)}</p>
-          </div>
-          <div className="quick-actions">
-            <button className="ghost" onClick={() => updateState((draft) => ({ ...draft, activeView: "crm" }))}>
-              Log Activity
-            </button>
-            {liveMode ? (
-              <button className="danger" onClick={signOut} type="button">
-                Sign Out
-              </button>
-            ) : (
-              <>
-                <a className="ghost" href="/login">
-                  Login
-                </a>
-                <button className="danger" onClick={() => updateState(cloneInitialState())} type="button">
-                  Reset Demo
-                </button>
-              </>
-            )}
-          </div>
-        </section>
-
         {notice ? <div className="notice">{notice}</div> : null}
         {workspaceLoading ? (
           <div className="inline-loading">
@@ -426,7 +405,7 @@ export default function SalesCommandApp() {
           </div>
         ) : null}
 
-        {state.activeView === "team" ? (
+        {activeView === "team" ? (
           <TeamView
             state={state}
             rankedReps={rankedReps}
@@ -434,10 +413,10 @@ export default function SalesCommandApp() {
             setActiveView={(view) => updateState((draft) => ({ ...draft, activeView: view }))}
           />
         ) : null}
-        {state.activeView === "crm" ? (
+        {activeView === "crm" ? (
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
         ) : null}
-        {state.activeView === "course" ? (
+        {activeView === "course" ? (
           <CourseView
             configured={configured}
             currentRep={currentRep}
@@ -447,10 +426,8 @@ export default function SalesCommandApp() {
             state={state}
           />
         ) : null}
-        {state.activeView === "coach" ? <CoachView /> : null}
-        {state.activeView === "admin" && currentRep?.role === "admin" ? (
+        {activeView === "admin" && currentRep?.role === "admin" ? (
           <AdminView
-            currentRep={currentRep}
             refresh={() => loadLiveState(createBrowserSupabaseClient(), session.user.id)}
             session={session}
             state={state}
@@ -469,9 +446,7 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
       <div className="home-grid">
         <article className="card focus-card">
           <div>
-            <span className="eyebrow">Next</span>
             <h3>{nextTask.title}</h3>
-            <p>{nextTask.detail}</p>
           </div>
           <button className="button" type="button" onClick={() => setActiveView(nextTask.view)}>
             {nextTask.action}
@@ -479,10 +454,9 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
         </article>
 
         <article className="card score-card">
-          <span className="eyebrow">My Score</span>
           <strong>{currentStats.score}</strong>
           <div className="small">
-            {currentStats.onboarding}% course / {currentStats.demos} demos / {currentStats.closed} closed / {formatMoney(currentStats.revenue)}
+            {currentStats.onboarding}% / {currentStats.closed} closed / {formatMoney(currentStats.revenue)}
           </div>
         </article>
       </div>
@@ -512,13 +486,12 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
             </div>
           ))
         ) : (
-          <div className="empty">No reps yet. Create an account to start the board.</div>
+          <div className="empty">No reps</div>
         )}
       </article>
 
       <div className="section-title">
         <h3>Recent Activity</h3>
-        <span className="pill">{state.crm.length} records</span>
       </div>
       <CrmTable state={state} entries={state.crm.slice(0, 6)} />
     </>
@@ -556,22 +529,21 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
   return (
     <>
       <div className="crm-summary-grid">
-        <Metric label="Calls" value={stats.calls} detail="All logged touches" />
-        <Metric label="Demos" value={stats.demos} detail="Booked walkthroughs" />
-        <Metric label="Closed" value={stats.closed} detail="Won sales" />
-        <Metric label="Revenue" value={formatMoney(stats.revenue)} detail="Closed sale value" />
+        <Metric label="Calls" value={stats.calls} />
+        <Metric label="Demos" value={stats.demos} />
+        <Metric label="Closed" value={stats.closed} />
+        <Metric label="Revenue" value={formatMoney(stats.revenue)} />
       </div>
 
       <article className="card">
-        <h4>Sales Spreadsheet</h4>
         <form className="crm-form" onSubmit={handleSubmit}>
           <Field label="Firm">
-            <input name="firm" required placeholder="Immigration firm" />
+            <input name="firm" required />
           </Field>
           <Field label="Contact">
-            <input name="contact" required placeholder="Attorney or gatekeeper" />
+            <input name="contact" required />
           </Field>
-          <Field label="Contact role">
+          <Field label="Role">
             <select name="contactRole">
               <option>Attorney</option>
               <option>Gatekeeper</option>
@@ -600,12 +572,12 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
             </select>
           </Field>
           <Field label="Objection">
-            <input name="objection" placeholder="Busy, cost, AI concern..." />
+            <input name="objection" />
           </Field>
           <Field label="Sale amount">
-            <input name="saleAmount" min="0" placeholder="0" step="0.01" type="number" />
+            <input name="saleAmount" min="0" step="0.01" type="number" />
           </Field>
-          <Field label="Contract term">
+          <Field label="Term">
             <select name="contractTerm">
               <option value="">None</option>
               <option>Monthly</option>
@@ -614,31 +586,30 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
               <option>Pilot</option>
             </select>
           </Field>
-          <Field label="Close date">
+          <Field label="Close">
             <input name="closeDate" type="date" />
           </Field>
-          <Field label="Next follow-up">
+          <Field label="Follow-up">
             <input name="nextFollowUp" type="date" />
           </Field>
-          <button className="button" type="submit">
-            Add Row
-          </button>
           <Field label="Notes" wide>
-            <textarea name="notes" required placeholder="Pain, next step, workflow details" />
+            <textarea name="notes" required />
           </Field>
+          <button className="button crm-submit" type="submit">
+            Add
+          </button>
         </form>
       </article>
 
       <div className="section-title">
-        <h3>My CRM</h3>
-        <span className="pill">{entries.length} records</span>
+        <h3>Activity</h3>
       </div>
       <CrmTable state={state} entries={entries} />
     </>
   );
 }
 
-function AdminView({ currentRep, refresh, session, state }) {
+function AdminView({ refresh, session, state }) {
   const [formState, setFormState] = useState({ fullName: "", email: "", password: "" });
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
@@ -679,12 +650,7 @@ function AdminView({ currentRep, refresh, session, state }) {
     <div className="admin-page">
       <div className="admin-grid">
         <article className="card admin-create">
-          <span className="eyebrow">Admin access</span>
-          <h3>Create Rep Account</h3>
-          <p className="lesson-copy">
-            New accounts are created as reps only. Admin access is restricted to Uzi Isman and
-            Joshua Reinfeld.
-          </p>
+          <h3>New Rep</h3>
           <form className="admin-form" onSubmit={createAccount}>
             <Field label="Full name">
               <input
@@ -715,26 +681,14 @@ function AdminView({ currentRep, refresh, session, state }) {
             </Field>
             {message ? <div className="notice">{message}</div> : null}
             <button className="button" disabled={creating} type="submit">
-              {creating ? "Creating..." : "Create Account"}
+              {creating ? "Creating..." : "Create"}
             </button>
           </form>
-        </article>
-
-        <article className="card admin-status">
-          <span className="eyebrow">Signed in admin</span>
-          <h3>{currentRep.name}</h3>
-          <p>{currentRep.email}</p>
-          <div className="admin-rule">
-            <strong>Authorized admins</strong>
-            <span>Uzi Isman</span>
-            <span>Joshua Reinfeld</span>
-          </div>
         </article>
       </div>
 
       <div className="section-title">
-        <h3>Rep Directory</h3>
-        <span className="pill">{rankedReps.length} accounts</span>
+        <h3>Users</h3>
       </div>
       <div className="table-wrap">
         <table className="admin-table">
@@ -3580,35 +3534,8 @@ function HomeworkField({ label, field, homework, updateHomework }) {
   );
 }
 
-function CoachView() {
-  return (
-    <div className="coach-grid">
-      <article className="card">
-        <h4>Objection Drill</h4>
-        {objectionBank.map((item) => (
-          <div className="script-box" key={item.objection}>
-            <strong>{item.objection}</strong>
-            <br />
-            {item.response}
-          </div>
-        ))}
-      </article>
-      <article className="card">
-        <h4>Certification Targets</h4>
-        <ul className="compact-list">
-          <li>Explain Coverable in under 20 seconds.</li>
-          <li>Name five law firm pain points.</li>
-          <li>Handle gatekeeper objections without folding.</li>
-          <li>Ask at least six discovery questions on a closing call.</li>
-          <li>Log every useful touch in the CRM.</li>
-        </ul>
-      </article>
-    </div>
-  );
-}
-
 function CrmTable({ state, entries }) {
-  if (!entries.length) return <div className="empty">No CRM activity yet.</div>;
+  if (!entries.length) return <div className="empty">No activity</div>;
   return (
     <div className="table-wrap">
       <table>
@@ -3660,12 +3587,11 @@ function CrmTable({ state, entries }) {
   );
 }
 
-function Metric({ label, value, detail }) {
+function Metric({ label, value }) {
   return (
     <article className="card metric">
       <span className="label">{label}</span>
       <span className="value">{value}</span>
-      <span className="small">{detail}</span>
     </article>
   );
 }
@@ -3685,15 +3611,12 @@ function LoadingShell({ slow, notice }) {
       <section className="login-panel">
         <div className="brand compact">
           <div className="mark">C</div>
-          <div>
-            <h1>Coverable Command</h1>
-            <span>Loading sales floor</span>
-          </div>
+          <h1>Coverable</h1>
         </div>
         <div className="loading-block">
           <div className="loading-bar" />
           <div className="notice">
-            {slow ? notice || "Still loading your workspace..." : "Loading your workspace..."}
+            {slow ? notice || "Still loading..." : "Loading..."}
           </div>
           {slow ? (
             <a className="ghost text-center" href="/login">
@@ -3712,19 +3635,14 @@ function LoginRequired() {
       <section className="login-panel">
         <div className="brand compact">
           <div className="mark">C</div>
-          <div>
-            <h1>Coverable Command</h1>
-            <span>Rep sales cockpit</span>
-          </div>
+          <h1>Coverable</h1>
         </div>
         <div className="login-form">
           <div>
-            <div className="eyebrow">Online mode</div>
-            <h2>Sign in to continue</h2>
-            <p>Sales activity, onboarding progress, and team competition now save to Supabase.</p>
+            <h2>Sign in</h2>
           </div>
           <a className="button text-center" href="/login">
-            Go to Login
+            Continue
           </a>
         </div>
       </section>
@@ -3820,31 +3738,10 @@ function isMissingCrmSalesFields(error) {
   );
 }
 
-function viewTitle(view) {
-  return {
-    team: "Team Progress",
-    crm: "Sales CRM",
-    course: "Onboarding Course",
-    coach: "Practice Coach",
-    admin: "Admin Console"
-  }[view];
-}
-
-function viewSubtitle(view) {
-  return {
-    team: "See other reps, their course progress, and sales performance from CRM activity.",
-    crm: "Log the calls, conversations, objections, follow-ups, demos, and closes that drive the scoreboard.",
-    course: "Work through the Coverable bootcamp with interactive progress tracking.",
-    coach: "Practice scripts and objections before live calls.",
-    admin: "Create rep accounts and monitor onboarding and sales performance."
-  }[view];
-}
-
 function nextCourseTask(state, currentStats) {
   if (currentStats.onboarding >= 100) {
     return {
       title: "Keep the board moving",
-      detail: "Log today's calls, demos, and follow-ups.",
       action: "Open CRM",
       view: "crm"
     };
@@ -3855,7 +3752,6 @@ function nextCourseTask(state, currentStats) {
   const nextDay = bootcampDays.find((day) => (progress[day.id] || 0) < 100) || bootcampDays[0];
   return {
     title: nextDay.title,
-    detail: nextDay.focus,
     action: "Continue",
     view: "course"
   };

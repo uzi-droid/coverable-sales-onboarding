@@ -35,10 +35,7 @@ export default function AuthCallbackPage() {
       <section className="login-panel">
         <div className="brand compact">
           <div className="mark">C</div>
-          <div>
-            <h1>Coverable Command</h1>
-            <span>Account confirmation</span>
-          </div>
+          <h1>Coverable</h1>
         </div>
         <div className="loading-block">
           <div className="loading-bar" />
