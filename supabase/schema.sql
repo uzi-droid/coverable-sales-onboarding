@@ -58,10 +58,6 @@ create policy "users can insert their own profile"
   on public.profiles for insert
   with check (auth.uid() = id);
 
-create policy "users can update their own profile"
-  on public.profiles for update
-  using (auth.uid() = id);
-
 create policy "users can read all onboarding progress"
   on public.onboarding_progress for select
   using (true);
@@ -100,6 +96,24 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.enforce_admin_allowlist()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.role = 'admin'
+    and lower(new.email) not in ('uzi@coverable.ai', 'joshuareinfeld17@gmail.com') then
+    raise exception 'Only approved admin accounts may have the admin role';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_admin_allowlist_on_profiles on public.profiles;
+create trigger enforce_admin_allowlist_on_profiles
+  before insert or update of email, role on public.profiles
+  for each row execute function public.enforce_admin_allowlist();
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

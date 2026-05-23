@@ -110,7 +110,7 @@ export default function SalesCommandApp() {
         { data: crm, error: crmError }
       ] = await withTimeout(
         Promise.all([
-          supabase.from("profiles").select("id, full_name, email, start_date").order("created_at", { ascending: true }),
+          supabase.from("profiles").select("id, full_name, email, role, start_date").order("created_at", { ascending: true }),
           supabase.from("onboarding_progress").select("user_id, module_id, percent_complete"),
           supabase
             .from("crm_activities")
@@ -130,6 +130,7 @@ export default function SalesCommandApp() {
         id: profile.id,
         name: profile.full_name,
         email: profile.email,
+        role: profile.role || "rep",
         initials: initialsFor(profile.full_name || profile.email),
         startDate: profile.start_date
       }));
@@ -204,18 +205,20 @@ export default function SalesCommandApp() {
       const { data } = await withTimeout(supabase.auth.getUser(), "User profile took too long");
       const user = data.user;
       if (user) {
-        await withTimeout(
-          supabase.from("profiles").upsert(
-            {
-              id: user.id,
-              full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
-              email: user.email,
-              role: "rep"
-            },
-            { onConflict: "id" }
-          ),
+        const { data: existing } = await withTimeout(
+          supabase.from("profiles").select("id").eq("id", user.id).maybeSingle(),
           "Profile repair took too long"
         );
+        if (!existing) {
+          await withTimeout(
+            supabase.from("profiles").insert({
+              id: user.id,
+              full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep",
+              email: user.email
+            }),
+            "Profile repair took too long"
+          );
+        }
       }
     } catch {
       // Profile repair is best-effort. It must never block the app shell.
@@ -366,7 +369,8 @@ export default function SalesCommandApp() {
             ["team", "Team", "Pulse"],
             ["crm", "CRM", "Log"],
             ["course", "Course", "Learn"],
-            ["coach", "Coach", "Drill"]
+            ["coach", "Coach", "Drill"],
+            ...(currentRep?.role === "admin" ? [["admin", "Admin", "Manage"]] : [])
           ].map(([id, label, hint]) => (
             <button
               key={id}
@@ -444,6 +448,14 @@ export default function SalesCommandApp() {
           />
         ) : null}
         {state.activeView === "coach" ? <CoachView /> : null}
+        {state.activeView === "admin" && currentRep?.role === "admin" ? (
+          <AdminView
+            currentRep={currentRep}
+            refresh={() => loadLiveState(createBrowserSupabaseClient(), session.user.id)}
+            session={session}
+            state={state}
+          />
+        ) : null}
       </main>
     </div>
   );
@@ -623,6 +635,143 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
       </div>
       <CrmTable state={state} entries={entries} />
     </>
+  );
+}
+
+function AdminView({ currentRep, refresh, session, state }) {
+  const [formState, setFormState] = useState({ fullName: "", email: "", password: "" });
+  const [message, setMessage] = useState("");
+  const [creating, setCreating] = useState(false);
+  const rankedReps = rankReps(state);
+
+  async function createAccount(event) {
+    event.preventDefault();
+    setCreating(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(formState)
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMessage(payload.error || "Account could not be created.");
+        return;
+      }
+
+      setMessage(`${payload.user.fullName} has been created as a rep and can sign in immediately.`);
+      setFormState({ fullName: "", email: "", password: "" });
+      await refresh();
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="admin-page">
+      <div className="admin-grid">
+        <article className="card admin-create">
+          <span className="eyebrow">Admin access</span>
+          <h3>Create Rep Account</h3>
+          <p className="lesson-copy">
+            New accounts are created as reps only. Admin access is restricted to Uzi Isman and
+            Joshua Reinfeld.
+          </p>
+          <form className="admin-form" onSubmit={createAccount}>
+            <Field label="Full name">
+              <input
+                required
+                value={formState.fullName}
+                onChange={(event) => setFormState({ ...formState, fullName: event.target.value })}
+                placeholder="Jacob Ryan"
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                required
+                type="email"
+                value={formState.email}
+                onChange={(event) => setFormState({ ...formState, email: event.target.value })}
+                placeholder="rep@email.com"
+              />
+            </Field>
+            <Field label="Temporary password">
+              <input
+                required
+                minLength={8}
+                type="password"
+                value={formState.password}
+                onChange={(event) => setFormState({ ...formState, password: event.target.value })}
+                placeholder="Minimum 8 characters"
+              />
+            </Field>
+            {message ? <div className="notice">{message}</div> : null}
+            <button className="button" disabled={creating} type="submit">
+              {creating ? "Creating..." : "Create Account"}
+            </button>
+          </form>
+        </article>
+
+        <article className="card admin-status">
+          <span className="eyebrow">Signed in admin</span>
+          <h3>{currentRep.name}</h3>
+          <p>{currentRep.email}</p>
+          <div className="admin-rule">
+            <strong>Authorized admins</strong>
+            <span>Uzi Isman</span>
+            <span>Joshua Reinfeld</span>
+          </div>
+        </article>
+      </div>
+
+      <div className="section-title">
+        <h3>Rep Directory</h3>
+        <span className="pill">{rankedReps.length} accounts</span>
+      </div>
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Rep</th>
+              <th>Access</th>
+              <th>Course</th>
+              <th>Demos</th>
+              <th>Closed</th>
+              <th>Revenue</th>
+              <th>Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rankedReps.map((rep) => (
+              <tr key={rep.id}>
+                <td>
+                  <strong>{rep.name}</strong>
+                  <div className="small">{rep.email}</div>
+                </td>
+                <td>
+                  <span className={`status ${rep.role === "admin" ? "done" : ""}`}>
+                    {rep.role === "admin" ? "Admin" : "Rep"}
+                  </span>
+                </td>
+                <td>{rep.onboarding}%</td>
+                <td>{rep.demos}</td>
+                <td>{rep.closed}</td>
+                <td className="money-cell">{formatMoney(rep.revenue)}</td>
+                <td className="money-cell">{rep.score}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -3632,6 +3781,7 @@ function profileFromUser(user) {
     id: user.id,
     name,
     email: user.email,
+    role: "rep",
     initials: initialsFor(name || user.email || "New Rep"),
     startDate: new Date().toISOString().slice(0, 10)
   };
@@ -3675,7 +3825,8 @@ function viewTitle(view) {
     team: "Team Progress",
     crm: "Sales CRM",
     course: "Onboarding Course",
-    coach: "Practice Coach"
+    coach: "Practice Coach",
+    admin: "Admin Console"
   }[view];
 }
 
@@ -3684,7 +3835,8 @@ function viewSubtitle(view) {
     team: "See other reps, their course progress, and sales performance from CRM activity.",
     crm: "Log the calls, conversations, objections, follow-ups, demos, and closes that drive the scoreboard.",
     course: "Work through the Coverable bootcamp with interactive progress tracking.",
-    coach: "Practice scripts and objections before live calls."
+    coach: "Practice scripts and objections before live calls.",
+    admin: "Create rep accounts and monitor onboarding and sales performance."
   }[view];
 }
 

@@ -1134,6 +1134,70 @@ textarea {
   gap: 12px;
 }
 
+.admin-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(260px, 0.7fr);
+  gap: 14px;
+}
+
+.admin-create,
+.admin-status {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.admin-create h3,
+.admin-status h3 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.admin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-status p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-rule {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  border: 1px solid rgba(23, 32, 46, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.admin-rule span {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.admin-rule span::after {
+  content: "Admin";
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #047857;
+  background: #ecfdf5;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-table {
+  min-width: 760px;
+}
+
 .crm-form .wide {
   grid-column: span 4;
 }
@@ -1373,13 +1437,14 @@ tbody tr:hover td {
   }
 
   .nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
   }
 
   .grid.two,
   .grid.four,
   .home-grid,
   .crm-summary-grid,
+  .admin-grid,
   .day-grid,
   .lesson-steps,
   .lesson-grid,
