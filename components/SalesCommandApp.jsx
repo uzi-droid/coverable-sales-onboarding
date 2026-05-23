@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { bootcampDays, initialState } from "@/lib/demoData";
+import { immigrationScriptStates, SCRIPT_START_STATE_ID } from "@/lib/immigrationScriptFlow";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "coverable-sales-command-next-v1";
@@ -366,6 +367,7 @@ export default function SalesCommandApp() {
           {[
             ["team", "Team"],
             ["crm", "CRM"],
+            ["script", "Script"],
             ["course", "Course"],
             ...(currentRep?.role === "admin" ? [["admin", "Admin"]] : [])
           ].map(([id, label]) => (
@@ -417,6 +419,7 @@ export default function SalesCommandApp() {
         {activeView === "crm" ? (
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
         ) : null}
+        {activeView === "script" ? <ScriptView currentRep={currentRep} /> : null}
         {activeView === "course" ? (
           <CourseView
             configured={configured}
@@ -668,6 +671,143 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
       </section>
 
       {selectedEntry ? <CrmDetail entry={selectedEntry} onClose={() => setSelectedId("")} /> : null}
+    </div>
+  );
+}
+
+function ScriptView({ currentRep }) {
+  const [stateId, setStateId] = useState(SCRIPT_START_STATE_ID);
+  const [history, setHistory] = useState([]);
+  const [repName, setRepName] = useState(currentRep?.name || "");
+  const [copyStatus, setCopyStatus] = useState("");
+  const topRef = useRef(null);
+  const scriptTextRef = useRef(null);
+  const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
+  const script = state.script.split("[REP NAME]").join(repName.trim() || "[REP NAME]");
+
+  useEffect(() => {
+    setRepName(currentRep?.name || "");
+  }, [currentRep?.id, currentRep?.name]);
+
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ block: "start" });
+  }, [stateId]);
+
+  function clearCopyState() {
+    setCopyStatus("");
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function moveTo(nextStateId) {
+    setHistory((path) => [...path, state.id]);
+    setStateId(nextStateId);
+    clearCopyState();
+  }
+
+  function goBack() {
+    setHistory((path) => {
+      if (!path.length) return path;
+      setStateId(path[path.length - 1]);
+      return path.slice(0, -1);
+    });
+    clearCopyState();
+  }
+
+  function restart() {
+    setStateId(SCRIPT_START_STATE_ID);
+    setHistory([]);
+    clearCopyState();
+  }
+
+  async function copyScript() {
+    let copied = false;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(script);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+
+    if (!copied) {
+      const helper = document.createElement("textarea");
+      helper.value = script;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
+      copied = typeof document.execCommand === "function" && document.execCommand("copy");
+      document.body.removeChild(helper);
+    }
+
+    if (!copied && scriptTextRef.current) {
+      const range = document.createRange();
+      range.selectNodeContents(scriptTextRef.current);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    setCopyStatus(copied ? "Copied" : "Press Cmd+C");
+    window.setTimeout(() => setCopyStatus(""), 1600);
+  }
+
+  return (
+    <div className="script-page" ref={topRef}>
+      <header className="script-header">
+        <div>
+          <span className="script-state-label">Current state</span>
+          <h2>{state.title}</h2>
+          <span className="script-audience">{state.audience}</span>
+        </div>
+        <Field label="Rep name">
+          <input onChange={(event) => setRepName(event.target.value)} value={repName} />
+        </Field>
+      </header>
+
+      <section className="script-workspace">
+        <article className="script-reading card">
+          <div className="script-goal">
+            <span>Goal</span>
+            <strong>{state.goal}</strong>
+          </div>
+          <div className="script-card-text">
+            <span>{state.mode === "prompt" ? "Question" : "Read"}</span>
+            <p ref={scriptTextRef}>{script}</p>
+          </div>
+          {state.notes ? (
+            <div className="script-note">
+              <span>Strategy</span>
+              <p>{state.notes}</p>
+            </div>
+          ) : null}
+          <div className="script-controls">
+            <button className="ghost" disabled={!history.length} onClick={goBack} type="button">
+              Back
+            </button>
+            <button className="ghost" onClick={restart} type="button">
+              Restart
+            </button>
+            <button className="button" onClick={copyScript} type="button">
+              {copyStatus || "Copy script"}
+            </button>
+          </div>
+        </article>
+
+        <section className="script-responses">
+          <span>They say</span>
+          <div className="script-buttons">
+            {state.buttons.map((button) => (
+              <button className="response-button" key={button.label} onClick={() => moveTo(button.nextStateId)} type="button">
+                {button.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      </section>
     </div>
   );
 }
