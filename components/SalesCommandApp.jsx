@@ -679,11 +679,16 @@ function ScriptView({ currentRep }) {
   const [stateId, setStateId] = useState(SCRIPT_START_STATE_ID);
   const [history, setHistory] = useState([]);
   const [repName, setRepName] = useState(currentRep?.name || "");
+  const [callbackNumber, setCallbackNumber] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const topRef = useRef(null);
   const scriptTextRef = useRef(null);
   const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
-  const script = state.script.split("[REP NAME]").join(repName.trim() || "[REP NAME]");
+  const script = state.script
+    .split("[REP NAME]")
+    .join(repName.trim() || "[REP NAME]")
+    .split("[NUMBER]")
+    .join(callbackNumber.trim() || "[NUMBER]");
 
   useEffect(() => {
     setRepName(currentRep?.name || "");
@@ -763,9 +768,14 @@ function ScriptView({ currentRep }) {
           <h2>{state.title}</h2>
           <span className="script-audience">{state.audience}</span>
         </div>
-        <Field label="Rep name">
-          <input onChange={(event) => setRepName(event.target.value)} value={repName} />
-        </Field>
+        <div className="script-fields">
+          <Field label="Rep name">
+            <input onChange={(event) => setRepName(event.target.value)} value={repName} />
+          </Field>
+          <Field label="Callback number">
+            <input onChange={(event) => setCallbackNumber(event.target.value)} placeholder="(555) 555-5555" value={callbackNumber} />
+          </Field>
+        </div>
       </header>
 
       <section className="script-workspace">
@@ -775,7 +785,7 @@ function ScriptView({ currentRep }) {
             <strong>{state.goal}</strong>
           </div>
           <div className="script-card-text">
-            <span>{state.mode === "prompt" ? "Question" : "Read"}</span>
+            <span>{state.mode === "prompt" ? "Prompt" : "Read"}</span>
             <p ref={scriptTextRef}>{script}</p>
           </div>
           {state.notes ? (

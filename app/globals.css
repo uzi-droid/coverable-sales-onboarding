@@ -2439,8 +2439,13 @@ a:focus-visible {
   padding: 5px 11px;
 }
 
-.script-header .field {
-  flex: 0 1 235px;
+.script-fields {
+  display: flex;
+  gap: 10px;
+}
+
+.script-fields .field {
+  width: 190px;
 }
 
 .script-workspace {
@@ -2578,6 +2583,15 @@ a:focus-visible {
 }
 
 @media (max-width: 1050px) {
+  .script-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .script-fields {
+    max-width: 400px;
+  }
+
   .script-workspace {
     grid-template-columns: 1fr;
   }
@@ -2605,13 +2619,14 @@ a:focus-visible {
 }
 
 @media (max-width: 620px) {
-  .script-header {
-    align-items: stretch;
-    flex-direction: column;
+  .script-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: none;
   }
 
-  .script-header .field {
-    flex-basis: auto;
+  .script-fields .field {
+    width: auto;
   }
 
   .script-reading {
@@ -2630,5 +2645,11 @@ a:focus-visible {
     flex-basis: 100%;
     margin-left: 0;
     order: -1;
+  }
+}
+
+@media (max-width: 440px) {
+  .script-fields {
+    grid-template-columns: 1fr;
   }
 }
