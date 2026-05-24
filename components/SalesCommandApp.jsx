@@ -799,7 +799,7 @@ function ScriptView({ currentRep }) {
 
         <section className="script-responses">
           <span>They say</span>
-          <div className="script-buttons">
+          <div className={`script-buttons ${state.buttons.length > 7 ? "dense" : ""}`}>
             {state.buttons.map((button) => (
               <button className="response-button" key={button.label} onClick={() => moveTo(button.nextStateId)} type="button">
                 {button.label}

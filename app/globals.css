@@ -2453,7 +2453,12 @@ a:focus-visible {
 .script-reading {
   display: grid;
   gap: 20px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  max-height: calc(100svh - 154px);
+  overflow: hidden;
   padding: 24px;
+  position: sticky;
+  top: 18px;
 }
 
 .script-goal {
@@ -2472,13 +2477,17 @@ a:focus-visible {
 .script-card-text {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .script-card-text p {
   color: #fff;
-  font-size: clamp(23px, 2.5vw, 29px);
+  font-size: 23px;
   font-weight: 450;
   line-height: 1.42;
+  letter-spacing: 0;
   margin: 0;
 }
 
@@ -2525,12 +2534,24 @@ a:focus-visible {
   border-radius: 20px;
   display: grid;
   gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100svh - 154px);
+  overflow: hidden;
   padding: 15px;
+  position: sticky;
+  top: 18px;
 }
 
 .script-buttons {
   display: grid;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.script-buttons.dense {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .response-button {
@@ -2544,6 +2565,12 @@ a:focus-visible {
   text-align: left;
 }
 
+.script-buttons.dense .response-button {
+  font-size: 14px;
+  min-height: 47px;
+  padding: 10px 12px;
+}
+
 .response-button:hover {
   background: rgba(255, 255, 255, 0.09);
   border-color: rgba(255, 255, 255, 0.2);
@@ -2554,8 +2581,25 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .script-reading,
   .script-responses {
+    max-height: none;
     order: 2;
+    position: static;
+  }
+
+  .script-reading {
+    grid-template-rows: none;
+    order: 1;
+    overflow: visible;
+  }
+
+  .script-card-text {
+    overflow: visible;
+  }
+
+  .script-buttons {
+    max-height: min(52svh, 510px);
   }
 }
 
@@ -2574,7 +2618,11 @@ a:focus-visible {
   }
 
   .script-card-text p {
-    font-size: 21px;
+    font-size: 20px;
+  }
+
+  .script-buttons.dense {
+    grid-template-columns: 1fr;
   }
 
   .script-controls .button {
