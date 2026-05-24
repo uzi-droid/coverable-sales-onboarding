@@ -2544,7 +2544,7 @@ a:focus-visible {
 
 .script-buttons {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
@@ -2566,9 +2566,10 @@ a:focus-visible {
 }
 
 .script-buttons.dense .response-button {
-  font-size: 14px;
-  min-height: 47px;
-  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.18;
+  min-height: 39px;
+  padding: 7px 10px;
 }
 
 .response-button:hover {
