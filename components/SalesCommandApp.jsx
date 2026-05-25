@@ -278,6 +278,52 @@ export default function SalesCommandApp() {
     return true;
   }
 
+  async function recordScriptCall() {
+    const repId = currentRep?.id;
+    if (!repId) return false;
+
+    const entry = {
+      id: crypto.randomUUID(),
+      repId,
+      firm: "Script call",
+      contact: "Not recorded",
+      contactRole: "Unknown",
+      outcome: "Call Logged",
+      channel: "Phone",
+      objection: "",
+      saleAmount: 0,
+      contractTerm: "",
+      closeDate: "",
+      notes: "Logged from adaptive script.",
+      nextFollowUp: "",
+      createdAt: new Date().toISOString().slice(0, 10)
+    };
+
+    if (!configured || !session) {
+      updateState((draft) => ({ ...draft, crm: [entry, ...draft.crm] }));
+      return true;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.from("crm_activities").insert({
+      user_id: session.user.id,
+      firm_name: entry.firm,
+      contact_name: entry.contact,
+      contact_role: entry.contactRole,
+      outcome: entry.outcome,
+      channel: entry.channel,
+      notes: entry.notes
+    });
+
+    if (error) {
+      setNotice(`Call was not counted: ${error.message}`);
+      return false;
+    }
+
+    await loadLiveState(supabase, session.user.id);
+    return true;
+  }
+
   async function saveProgress(moduleId, amount) {
     const repId = currentRep?.id;
     if (!repId) return;
@@ -419,7 +465,9 @@ export default function SalesCommandApp() {
         {activeView === "crm" ? (
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
         ) : null}
-        {activeView === "script" ? <ScriptView currentRep={currentRep} /> : null}
+        {activeView === "script" ? (
+          <ScriptView currentRep={currentRep} recordScriptCall={recordScriptCall} />
+        ) : null}
         {activeView === "course" ? (
           <CourseView
             configured={configured}
@@ -475,7 +523,10 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
             <div className="leader-row minimal" key={rep.id}>
               <div className="rank">{index + 1}</div>
               <div>
-                <div className="rep-name">{rep.name}</div>
+                <div className="rep-name">
+                  {rep.name}
+                  <span className="rep-call-count">{rep.calls} calls</span>
+                </div>
                 <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
                   <div className="progress-fill" />
                 </div>
@@ -556,7 +607,7 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
     <div className="crm-page">
       <div className="crm-head">
         <div className="crm-summary-grid">
-          <Metric label="Activity" value={stats.calls} />
+          <Metric label="Activity" value={stats.activity} />
           <Metric label="Demos" value={stats.demos} />
           <Metric label="Closed" value={stats.closed} />
           <Metric label="Revenue" value={formatMoney(stats.revenue)} />
@@ -675,12 +726,13 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
   );
 }
 
-function ScriptView({ currentRep }) {
+function ScriptView({ currentRep, recordScriptCall }) {
   const [stateId, setStateId] = useState(SCRIPT_START_STATE_ID);
   const [history, setHistory] = useState([]);
   const [repName, setRepName] = useState(currentRep?.name || "");
   const [callbackNumber, setCallbackNumber] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
+  const [loggingCall, setLoggingCall] = useState(false);
   const topRef = useRef(null);
   const scriptTextRef = useRef(null);
   const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
@@ -718,10 +770,16 @@ function ScriptView({ currentRep }) {
     clearCopyState();
   }
 
-  function restart() {
-    setStateId(SCRIPT_START_STATE_ID);
-    setHistory([]);
-    clearCopyState();
+  async function restart() {
+    if (loggingCall) return;
+    setLoggingCall(true);
+    const saved = await recordScriptCall();
+    if (saved) {
+      setStateId(SCRIPT_START_STATE_ID);
+      setHistory([]);
+      clearCopyState();
+    }
+    setLoggingCall(false);
   }
 
   async function copyScript() {
@@ -798,8 +856,8 @@ function ScriptView({ currentRep }) {
             <button className="ghost" disabled={!history.length} onClick={goBack} type="button">
               Back
             </button>
-            <button className="ghost" onClick={restart} type="button">
-              Restart
+            <button className="ghost" disabled={loggingCall} onClick={restart} type="button">
+              {loggingCall ? "Saving..." : "Log call + restart"}
             </button>
             <button className="button" onClick={copyScript} type="button">
               {copyStatus || "Copy script"}
@@ -811,7 +869,13 @@ function ScriptView({ currentRep }) {
           <span>They say</span>
           <div className={`script-buttons ${state.buttons.length > 7 ? "dense" : ""}`}>
             {state.buttons.map((button) => (
-              <button className="response-button" key={button.label} onClick={() => moveTo(button.nextStateId)} type="button">
+              <button
+                className="response-button"
+                disabled={loggingCall}
+                key={button.label}
+                onClick={() => (button.nextStateId === SCRIPT_START_STATE_ID ? restart() : moveTo(button.nextStateId))}
+                type="button"
+              >
                 {button.label}
               </button>
             ))}
@@ -3934,7 +3998,8 @@ function getRepStats(state, repId) {
   const onboarding = progressValues.length
     ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / bootcampDays.length)
     : 0;
-  const calls = entries.length;
+  const activity = entries.length;
+  const calls = entries.filter((entry) => entry.channel === "Phone").length;
   const demos = entries.filter((entry) => entry.outcome === "Demo Booked").length;
   const closed = entries.filter((entry) => entry.outcome === "Closed").length;
   const followUps = entries.filter((entry) => entry.outcome === "Follow-up").length;
@@ -3942,12 +4007,12 @@ function getRepStats(state, repId) {
   const revenue = entries
     .filter((entry) => entry.outcome === "Closed")
     .reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
-  const score = calls * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 100 + Math.round(revenue / 100) + onboarding;
-  return { calls, demos, closed, followUps, onboarding, revenue, score };
+  const score = activity * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 100 + Math.round(revenue / 100) + onboarding;
+  return { activity, calls, demos, closed, followUps, onboarding, revenue, score };
 }
 
 function getEmptyStats() {
-  return { calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, revenue: 0, score: 0 };
+  return { activity: 0, calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, revenue: 0, score: 0 };
 }
 
 function rankReps(state) {

@@ -1765,7 +1765,16 @@ tbody tr:hover td {
 }
 
 .rep-name {
+  align-items: baseline;
+  display: flex;
+  gap: 9px;
   font-weight: 900;
+}
+
+.rep-call-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .score {
