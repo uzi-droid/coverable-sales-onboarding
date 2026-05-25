@@ -108,7 +108,8 @@ export default function SalesCommandApp() {
       const [
         { data: profiles, error: profileError },
         { data: progress, error: progressError },
-        { data: crm, error: crmError }
+        { data: crm, error: crmError },
+        { data: scriptCalls, error: scriptCallsError }
       ] = await withTimeout(
         Promise.all([
           supabase.from("profiles").select("id, full_name, email, role, start_date").order("created_at", { ascending: true }),
@@ -116,15 +117,23 @@ export default function SalesCommandApp() {
           supabase
             .from("crm_activities")
             .select("*")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("script_call_metrics")
+            .select("id, user_id, button_clicks, created_at")
             .order("created_at", { ascending: false })
         ]),
         "Workspace data took too long to load"
       );
 
-      const firstError = profileError || progressError || crmError;
+      const scriptTableMissing = isMissingScriptCallTable(scriptCallsError);
+      const firstError = profileError || progressError || crmError || (scriptTableMissing ? null : scriptCallsError);
       if (firstError) {
         setNotice(firstError.message);
         return;
+      }
+      if (scriptTableMissing) {
+        setNotice("Script call tracking needs its Supabase setup script before calls can be counted.");
       }
 
       const reps = (profiles || []).map((profile) => ({
@@ -158,6 +167,12 @@ export default function SalesCommandApp() {
         currentRepId: currentUserId,
         reps,
         progress: progressByRep,
+        scriptCalls: (scriptCalls || []).map((row) => ({
+          id: row.id,
+          repId: row.user_id,
+          buttonClicks: Number(row.button_clicks || 0),
+          createdAt: row.created_at?.slice(0, 10) || ""
+        })),
         crm: (crm || []).map((row) => ({
           id: row.id,
           repId: row.user_id,
@@ -196,6 +211,7 @@ export default function SalesCommandApp() {
         progress: {
           [user.id]: Object.fromEntries(bootcampDays.map((day) => [day.id, 0]))
         },
+        scriptCalls: [],
         crm: []
       };
     });
@@ -278,45 +294,34 @@ export default function SalesCommandApp() {
     return true;
   }
 
-  async function recordScriptCall() {
+  async function recordScriptCall(buttonClicks) {
     const repId = currentRep?.id;
     if (!repId) return false;
 
     const entry = {
       id: crypto.randomUUID(),
       repId,
-      firm: "Script call",
-      contact: "Not recorded",
-      contactRole: "Unknown",
-      outcome: "Call Logged",
-      channel: "Phone",
-      objection: "",
-      saleAmount: 0,
-      contractTerm: "",
-      closeDate: "",
-      notes: "Logged from adaptive script.",
-      nextFollowUp: "",
+      buttonClicks,
       createdAt: new Date().toISOString().slice(0, 10)
     };
 
     if (!configured || !session) {
-      updateState((draft) => ({ ...draft, crm: [entry, ...draft.crm] }));
+      updateState((draft) => ({ ...draft, scriptCalls: [entry, ...(draft.scriptCalls || [])] }));
       return true;
     }
 
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.from("crm_activities").insert({
+    const { error } = await supabase.from("script_call_metrics").insert({
       user_id: session.user.id,
-      firm_name: entry.firm,
-      contact_name: entry.contact,
-      contact_role: entry.contactRole,
-      outcome: entry.outcome,
-      channel: entry.channel,
-      notes: entry.notes
+      button_clicks: buttonClicks
     });
 
     if (error) {
-      setNotice(`Call was not counted: ${error.message}`);
+      setNotice(
+        isMissingScriptCallTable(error)
+          ? "Call tracking is not enabled yet. Run supabase/script-call-metrics.sql in Supabase."
+          : `Call was not counted: ${error.message}`
+      );
       return false;
     }
 
@@ -506,9 +511,9 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
         </article>
 
         <article className="card score-card">
-          <strong>{currentStats.score}</strong>
+          <strong>{currentStats.calls}</strong>
           <div className="small">
-            {currentStats.onboarding}% / {currentStats.closed} closed / {formatMoney(currentStats.revenue)}
+            calls / {formatAverageClicks(currentStats.averageClicks)} avg clicks
           </div>
         </article>
       </div>
@@ -523,20 +528,17 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
             <div className="leader-row minimal" key={rep.id}>
               <div className="rank">{index + 1}</div>
               <div>
-                <div className="rep-name">
-                  {rep.name}
-                  <span className="rep-call-count">{rep.calls} calls</span>
-                </div>
+                <div className="rep-name">{rep.name}</div>
                 <div className="progress-track" style={{ "--progress": `${rep.onboarding}%` }}>
                   <div className="progress-fill" />
                 </div>
               </div>
               <div className="rep-stats">
-                <strong>{rep.score}</strong>
                 <span>{rep.onboarding}%</span>
+                <span>{rep.calls} calls</span>
+                <span>{formatAverageClicks(rep.averageClicks)} avg clicks</span>
                 <span>{rep.demos} demos</span>
                 <span>{rep.closed} closed</span>
-                <span>{formatMoney(rep.revenue)}</span>
               </div>
             </div>
           ))
@@ -733,6 +735,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
   const [callbackNumber, setCallbackNumber] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const [loggingCall, setLoggingCall] = useState(false);
+  const [buttonClicks, setButtonClicks] = useState(0);
   const topRef = useRef(null);
   const scriptTextRef = useRef(null);
   const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
@@ -757,6 +760,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
 
   function moveTo(nextStateId) {
     setHistory((path) => [...path, state.id]);
+    setButtonClicks((count) => count + 1);
     setStateId(nextStateId);
     clearCopyState();
   }
@@ -773,12 +777,11 @@ function ScriptView({ currentRep, recordScriptCall }) {
   async function restart() {
     if (loggingCall) return;
     setLoggingCall(true);
-    const saved = await recordScriptCall();
-    if (saved) {
-      setStateId(SCRIPT_START_STATE_ID);
-      setHistory([]);
-      clearCopyState();
-    }
+    await recordScriptCall(buttonClicks);
+    setStateId(SCRIPT_START_STATE_ID);
+    setHistory([]);
+    setButtonClicks(0);
+    clearCopyState();
     setLoggingCall(false);
   }
 
@@ -857,7 +860,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
               Back
             </button>
             <button className="ghost" disabled={loggingCall} onClick={restart} type="button">
-              {loggingCall ? "Saving..." : "Log call + restart"}
+              {loggingCall ? "Saving..." : "Restart"}
             </button>
             <button className="button" onClick={copyScript} type="button">
               {copyStatus || "Copy script"}
@@ -974,10 +977,11 @@ function AdminView({ refresh, session, state }) {
               <th>Rep</th>
               <th>Access</th>
               <th>Course</th>
+              <th>Calls</th>
+              <th>Avg clicks</th>
               <th>Demos</th>
               <th>Closed</th>
               <th>Revenue</th>
-              <th>Score</th>
             </tr>
           </thead>
           <tbody>
@@ -993,10 +997,11 @@ function AdminView({ refresh, session, state }) {
                   </span>
                 </td>
                 <td>{rep.onboarding}%</td>
+                <td>{rep.calls}</td>
+                <td>{formatAverageClicks(rep.averageClicks)}</td>
                 <td>{rep.demos}</td>
                 <td>{rep.closed}</td>
                 <td className="money-cell">{formatMoney(rep.revenue)}</td>
-                <td className="money-cell">{rep.score}</td>
               </tr>
             ))}
           </tbody>
@@ -3994,12 +3999,16 @@ function LoginRequired() {
 
 function getRepStats(state, repId) {
   const entries = state.crm.filter((entry) => entry.repId === repId);
+  const scriptCalls = (state.scriptCalls || []).filter((entry) => entry.repId === repId);
   const progressValues = Object.values(state.progress[repId] || {});
   const onboarding = progressValues.length
     ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / bootcampDays.length)
     : 0;
   const activity = entries.length;
-  const calls = entries.filter((entry) => entry.channel === "Phone").length;
+  const calls = scriptCalls.length;
+  const averageClicks = calls
+    ? scriptCalls.reduce((sum, entry) => sum + entry.buttonClicks, 0) / calls
+    : 0;
   const demos = entries.filter((entry) => entry.outcome === "Demo Booked").length;
   const closed = entries.filter((entry) => entry.outcome === "Closed").length;
   const followUps = entries.filter((entry) => entry.outcome === "Follow-up").length;
@@ -4007,18 +4016,17 @@ function getRepStats(state, repId) {
   const revenue = entries
     .filter((entry) => entry.outcome === "Closed")
     .reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
-  const score = activity * 5 + attorneyReached * 12 + followUps * 8 + demos * 20 + closed * 100 + Math.round(revenue / 100) + onboarding;
-  return { activity, calls, demos, closed, followUps, onboarding, revenue, score };
+  return { activity, calls, averageClicks, demos, closed, followUps, attorneyReached, onboarding, revenue };
 }
 
 function getEmptyStats() {
-  return { activity: 0, calls: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, revenue: 0, score: 0 };
+  return { activity: 0, calls: 0, averageClicks: 0, demos: 0, closed: 0, followUps: 0, onboarding: 0, revenue: 0 };
 }
 
 function rankReps(state) {
   return state.reps
     .map((rep) => ({ ...rep, ...getRepStats(state, rep.id) }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.closed - a.closed || b.demos - a.demos || b.calls - a.calls || b.onboarding - a.onboarding);
 }
 
 function initialsFor(value) {
@@ -4036,6 +4044,10 @@ function formatMoney(value) {
     currency: "USD",
     maximumFractionDigits: 0
   }).format(Number(value || 0));
+}
+
+function formatAverageClicks(value) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value || 0);
 }
 
 function formatShortDate(value) {
@@ -4087,6 +4099,11 @@ function isMissingCrmSalesFields(error) {
     message.includes("contract_term") ||
     message.includes("close_date")
   );
+}
+
+function isMissingScriptCallTable(error) {
+  const message = error?.message || "";
+  return error?.code === "42P01" || error?.code === "PGRST205" || message.includes("script_call_metrics");
 }
 
 function nextCourseTask(state, currentStats) {

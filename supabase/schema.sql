@@ -45,10 +45,18 @@ create table if not exists public.course_answers (
   unique (user_id, module_id)
 );
 
+create table if not exists public.script_call_metrics (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  button_clicks integer not null default 0 check (button_clicks >= 0),
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.onboarding_progress enable row level security;
 alter table public.crm_activities enable row level security;
 alter table public.course_answers enable row level security;
+alter table public.script_call_metrics enable row level security;
 
 create policy "reps can read all rep profiles"
   on public.profiles for select
@@ -79,6 +87,14 @@ create policy "users can manage their own CRM activity"
 create policy "users can manage their own course answers"
   on public.course_answers for all
   using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "users can read script call metrics"
+  on public.script_call_metrics for select
+  using (true);
+
+create policy "users can insert their own script call metrics"
+  on public.script_call_metrics for insert
   with check (auth.uid() = user_id);
 
 create or replace function public.handle_new_user()
