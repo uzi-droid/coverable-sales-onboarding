@@ -416,6 +416,36 @@ export default function SalesCommandApp() {
     return data;
   }
 
+  async function unassignFirm(firmId) {
+    const repId = currentRep?.id;
+    if (!repId) return false;
+
+    if (!configured || !session) {
+      let released = false;
+      updateState((draft) => ({
+        ...draft,
+        firms: (draft.firms || []).map((firm) => {
+          if (firm.id !== firmId || firm.assignedTo !== repId) return firm;
+          released = true;
+          return { ...firm, assignedTo: null, assignedAt: "" };
+        })
+      }));
+      return released;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase.rpc("unassign_firm", { p_firm_id: firmId });
+    if (error) {
+      setNotice(
+        isMissingFirmsSetup(error)
+          ? "Firm assignment needs the latest setup. Run supabase/firms.sql in Supabase."
+          : `Firm was not unassigned: ${error.message}`
+      );
+      return false;
+    }
+    return Boolean(data);
+  }
+
   async function saveProgress(moduleId, amount) {
     const repId = currentRep?.id;
     if (!repId) return;
@@ -567,6 +597,7 @@ export default function SalesCommandApp() {
             session={session}
             setNotice={setNotice}
             state={state}
+            unassignFirm={unassignFirm}
           />
         ) : null}
         {activeView === "script" ? (
@@ -651,7 +682,7 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
   );
 }
 
-function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session, setNotice, state }) {
+function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session, setNotice, state, unassignFirm }) {
   const pageSize = 50;
   const [firms, setFirms] = useState([]);
   const [total, setTotal] = useState(0);
@@ -785,6 +816,25 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
         } else {
           setFirms((current) => current.map((item) => (item.id === firm.id ? claimedFirm : item)));
         }
+      }
+      if (liveMode) await loadFirms();
+    }
+    setClaimingId("");
+  }
+
+  async function releaseFirm(event, firm) {
+    event.stopPropagation();
+    if (firm.assignedTo !== currentRep.id) return;
+    setClaimingId(firm.id);
+    const released = await unassignFirm(firm.id);
+    if (released) {
+      const openFirmState = { ...firm, assignedTo: null, assignedAt: "" };
+      setSelectedFirm((current) => (current?.id === firm.id ? openFirmState : current));
+      setNotice(`${firm.firmName || "Firm"} is unassigned.`);
+      if (status === "Mine" || status === currentRep.id || status === "Assigned") {
+        setFirms((current) => current.filter((item) => item.id !== firm.id));
+      } else {
+        setFirms((current) => current.map((item) => (item.id === firm.id ? openFirmState : item)));
       }
       if (liveMode) await loadFirms();
     }
@@ -953,13 +1003,35 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
                       </td>
                       <td>
                         {firm.assignedTo ? (
-                          <div className="firm-owner">
-                            <i className="firm-owner-dot filled" style={{ "--rep-color": repColor(firm.assignedTo, state.reps) }} />
-                            <div>
-                              <strong>{owner?.name || "Assigned"}</strong>
-                              <div className="small">{formatDateTime(firm.assignedAt)}</div>
+                          firm.assignedTo === currentRep.id ? (
+                            <button
+                              aria-label={`Unassign ${firm.firmName || "firm"}`}
+                              className="firm-claim firm-assigned-toggle"
+                              disabled={claimingId === firm.id}
+                              onClick={(event) => releaseFirm(event, firm)}
+                              type="button"
+                            >
+                              <i
+                                className="firm-owner-dot filled"
+                                style={{ "--rep-color": repColor(firm.assignedTo, state.reps) }}
+                              />
+                              <span>
+                                <strong>{owner?.name || "Assigned"}</strong>
+                                <small>{claimingId === firm.id ? "Unassigning..." : formatDateTime(firm.assignedAt)}</small>
+                              </span>
+                            </button>
+                          ) : (
+                            <div className="firm-owner">
+                              <i
+                                className="firm-owner-dot filled"
+                                style={{ "--rep-color": repColor(firm.assignedTo, state.reps) }}
+                              />
+                              <div>
+                                <strong>{owner?.name || "Assigned"}</strong>
+                                <div className="small">{formatDateTime(firm.assignedAt)}</div>
+                              </div>
                             </div>
-                          </div>
+                          )
                         ) : (
                           <button
                             aria-label={`Assign ${firm.firmName || "firm"} to me`}

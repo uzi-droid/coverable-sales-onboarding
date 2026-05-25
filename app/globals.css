@@ -2526,6 +2526,25 @@ a:focus-visible {
   opacity: 0.55;
 }
 
+.firm-assigned-toggle {
+  color: var(--ink);
+}
+
+.firm-assigned-toggle span {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.firm-assigned-toggle small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.firm-assigned-toggle:hover .firm-owner-dot {
+  background: transparent;
+}
+
 .firm-detail {
   display: grid;
   gap: 15px;

@@ -86,6 +86,30 @@ $$;
 revoke all on function public.claim_firm(uuid) from public;
 grant execute on function public.claim_firm(uuid) to authenticated;
 
+create or replace function public.unassign_firm(p_firm_id uuid)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  update public.firms
+  set
+    assigned_to = null,
+    assigned_at = null
+  where id = p_firm_id
+    and assigned_to = auth.uid();
+
+  return found;
+end;
+$$;
+
+revoke all on function public.unassign_firm(uuid) from public;
+grant execute on function public.unassign_firm(uuid) to authenticated;
+
 create or replace function public.mark_firm_called(p_firm_id uuid)
 returns void
 language plpgsql
