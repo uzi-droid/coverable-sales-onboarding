@@ -2400,7 +2400,7 @@ a:focus-visible {
 }
 
 .firms-table {
-  min-width: 850px;
+  min-width: 900px;
 }
 
 .firms-table td,
@@ -2413,15 +2413,40 @@ a:focus-visible {
 }
 
 .firms-table td:nth-child(2) {
-  min-width: 130px;
+  min-width: 125px;
 }
 
 .firms-table td:nth-child(3) {
+  min-width: 135px;
+}
+
+.firms-table td:nth-child(4) {
+  min-width: 90px;
+}
+
+.firms-table td:nth-child(5) {
   min-width: 125px;
+}
+
+.firms-table tbody tr {
+  cursor: pointer;
+}
+
+.firms-table tbody tr:focus-visible td {
+  background: rgba(255, 255, 255, 0.07);
+  outline: 1px solid var(--line-strong);
 }
 
 .firms-table tr.selected td {
   background: rgba(255, 255, 255, 0.055);
+}
+
+.firm-site {
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.28);
+  text-underline-offset: 3px;
 }
 
 .firm-phone {
@@ -2447,8 +2472,24 @@ a:focus-visible {
 .firm-detail {
   display: grid;
   gap: 15px;
-  max-width: 820px;
-  padding: 18px;
+  max-height: min(86vh, 820px);
+  max-width: 920px;
+  overflow: auto;
+  padding: 20px;
+  width: min(920px, calc(100vw - 36px));
+}
+
+.firm-modal-backdrop {
+  align-items: flex-start;
+  background: rgba(4, 6, 9, 0.7);
+  backdrop-filter: blur(9px);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: max(28px, 6vh) 18px;
+  position: fixed;
+  z-index: 40;
 }
 
 .firm-detail-grid {

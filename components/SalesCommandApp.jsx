@@ -361,6 +361,8 @@ export default function SalesCommandApp() {
           firm.id === firmId
             ? {
                 ...firm,
+                assignedTo: firm.assignedTo || repId,
+                assignedAt: firm.assignedAt || calledAt,
                 calledBy: repId,
                 calledAt,
                 callCount: Number(firm.callCount || 0) + 1
@@ -383,6 +385,37 @@ export default function SalesCommandApp() {
     }
 
     return true;
+  }
+
+  async function claimFirm(firmId) {
+    const repId = currentRep?.id;
+    if (!repId) return null;
+
+    if (!configured || !session) {
+      let ownerId = repId;
+      const assignedAt = new Date().toISOString();
+      updateState((draft) => ({
+        ...draft,
+        firms: (draft.firms || []).map((firm) => {
+          if (firm.id !== firmId) return firm;
+          ownerId = firm.assignedTo || repId;
+          return firm.assignedTo ? firm : { ...firm, assignedTo: repId, assignedAt };
+        })
+      }));
+      return ownerId;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase.rpc("claim_firm", { p_firm_id: firmId });
+    if (error) {
+      setNotice(
+        isMissingFirmsSetup(error)
+          ? "Firm assignment needs the latest setup. Run supabase/firms.sql in Supabase."
+          : `Firm was not assigned: ${error.message}`
+      );
+      return null;
+    }
+    return data;
   }
 
   async function saveProgress(moduleId, amount) {
@@ -530,6 +563,7 @@ export default function SalesCommandApp() {
         {activeView === "firms" ? (
           <FirmsView
             configured={configured}
+            claimFirm={claimFirm}
             currentRep={currentRep}
             recordFirmCall={recordFirmCall}
             session={session}
@@ -619,7 +653,7 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
   );
 }
 
-function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice, state }) {
+function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session, setNotice, state }) {
   const pageSize = 50;
   const [firms, setFirms] = useState([]);
   const [total, setTotal] = useState(0);
@@ -627,12 +661,12 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [practiceArea, setPracticeArea] = useState("All");
-  const [status, setStatus] = useState("Available");
-  const [selectedId, setSelectedId] = useState("");
+  const [status, setStatus] = useState("Unassigned");
+  const [selectedFirm, setSelectedFirm] = useState(null);
   const [loadingFirms, setLoadingFirms] = useState(false);
   const [callingId, setCallingId] = useState("");
+  const [claimingId, setClaimingId] = useState("");
   const liveMode = configured && Boolean(session);
-  const selectedFirm = firms.find((firm) => firm.id === selectedId);
 
   async function loadFirms() {
     setLoadingFirms(true);
@@ -642,9 +676,10 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
         const matchesPractice = practiceArea === "All" || firm.practiceArea === practiceArea;
         const matchesStatus =
           status === "All" ||
-          (status === "Available" && !firm.calledAt) ||
-          (status === "Called" && Boolean(firm.calledAt)) ||
-          (status === "Mine" && firm.calledBy === currentRep.id);
+          (status === "Unassigned" && !firm.assignedTo) ||
+          (status === "Assigned" && Boolean(firm.assignedTo)) ||
+          (status === "Mine" && firm.assignedTo === currentRep.id) ||
+          firm.assignedTo === status;
         const matchesSearch =
           !query ||
           [firm.firmName, firm.attorney, firm.phone, firm.email, firm.city, firm.state]
@@ -652,6 +687,9 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
             .toLowerCase()
             .includes(query);
         return matchesPractice && matchesStatus && matchesSearch;
+      }).sort((left, right) => {
+        const contactOrder = Number(Boolean(right.attorney)) - Number(Boolean(left.attorney));
+        return contactOrder || (left.firmName || "").localeCompare(right.firmName || "");
       });
       setTotal(filtered.length);
       setFirms(filtered.slice(page * pageSize, page * pageSize + pageSize));
@@ -663,15 +701,17 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
     let request = supabase
       .from("firms")
       .select(
-        "id, lead_attorney_full_name, first_name, last_name, firm_name, practice_area, website, firm_phone, attorney_email, linkedin_url, title, address, city, state, zip, source_url, confidence_score, notes, data_sources, outreach_tier, email_domain, free_email, lane_target, email_is_valid, called_by, called_at, call_count",
+        "id, lead_attorney_full_name, first_name, last_name, firm_name, practice_area, website, firm_phone, attorney_email, linkedin_url, title, address, city, state, zip, source_url, confidence_score, notes, data_sources, outreach_tier, email_domain, free_email, lane_target, email_is_valid, assigned_to, assigned_at, called_by, called_at, call_count, has_attorney",
         { count: "exact" }
       )
+      .order("has_attorney", { ascending: false })
       .order("firm_name", { ascending: true });
 
     if (practiceArea !== "All") request = request.eq("practice_area", practiceArea);
-    if (status === "Available") request = request.is("called_at", null);
-    if (status === "Called") request = request.not("called_at", "is", null);
-    if (status === "Mine") request = request.eq("called_by", currentRep.id);
+    if (status === "Unassigned") request = request.is("assigned_to", null);
+    if (status === "Assigned") request = request.not("assigned_to", "is", null);
+    if (status === "Mine") request = request.eq("assigned_to", currentRep.id);
+    if (!["All", "Unassigned", "Assigned", "Mine"].includes(status)) request = request.eq("assigned_to", status);
     if (search) {
       const term = search.replace(/[,%()]/g, " ").trim();
       if (term) {
@@ -703,6 +743,15 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveMode, page, practiceArea, search, status, state.firms]);
 
+  useEffect(() => {
+    if (!selectedFirm) return undefined;
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setSelectedFirm(null);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [selectedFirm]);
+
   function submitSearch(event) {
     event.preventDefault();
     setPage(0);
@@ -714,13 +763,39 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
     setter(value);
   }
 
-  async function callFirm(firm) {
+  async function openFirm(firm) {
+    setSelectedFirm(firm);
+    if (firm.assignedTo && firm.assignedTo !== currentRep.id) return;
+    setClaimingId(firm.id);
+    const ownerId = await claimFirm(firm.id);
+    if (ownerId) {
+      const owner = state.reps.find((rep) => rep.id === ownerId);
+      const claimedFirm = {
+        ...firm,
+        assignedTo: ownerId,
+        assignedAt: firm.assignedAt || new Date().toISOString()
+      };
+      setSelectedFirm(claimedFirm);
+      if (!firm.assignedTo) {
+        setNotice(`${firm.firmName || "Firm"} assigned to ${owner?.name || currentRep.name}.`);
+        if (status === "Unassigned") {
+          setFirms((current) => current.filter((item) => item.id !== firm.id));
+        } else {
+          setFirms((current) => current.map((item) => (item.id === firm.id ? claimedFirm : item)));
+        }
+      }
+      if (liveMode) await loadFirms();
+    }
+    setClaimingId("");
+  }
+
+  async function callFirm(event, firm) {
+    event.stopPropagation();
     setCallingId(firm.id);
     const saved = await recordFirmCall(firm.id);
     if (saved) {
       setNotice(`${firm.firmName || "Firm"} marked called by ${currentRep.name}.`);
       await loadFirms();
-      setSelectedId(firm.id);
       if (liveMode && firm.phone) window.location.href = `tel:${firm.phone}`;
     }
     setCallingId("");
@@ -777,11 +852,18 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
           <option value="business_law">Business law</option>
           <option value="other">Other</option>
         </select>
-        <select aria-label="Filter call status" onChange={(event) => chooseFilter(setStatus, event.target.value)} value={status}>
-          <option>Available</option>
+        <select aria-label="Filter owner" onChange={(event) => chooseFilter(setStatus, event.target.value)} value={status}>
+          <option>Unassigned</option>
           <option>Mine</option>
-          <option>Called</option>
+          <option>Assigned</option>
           <option>All</option>
+          {state.reps
+            .filter((rep) => rep.id !== currentRep.id)
+            .map((rep) => (
+              <option key={rep.id} value={rep.id}>
+                {rep.name}
+              </option>
+            ))}
         </select>
         <button className="button" type="submit">
           Search
@@ -800,30 +882,56 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
               <thead>
                 <tr>
                   <th>Firm</th>
+                  <th>Title</th>
                   <th>Practice</th>
-                  <th>Location</th>
+                  <th>Website</th>
                   <th>Phone</th>
-                  <th>Last called by</th>
-                  <th></th>
+                  <th>Owner</th>
                 </tr>
               </thead>
               <tbody>
                 {firms.map((firm) => {
-                  const caller = state.reps.find((rep) => rep.id === firm.calledBy);
+                  const owner = state.reps.find((rep) => rep.id === firm.assignedTo);
                   return (
-                    <tr className={selectedId === firm.id ? "selected" : ""} key={firm.id}>
+                    <tr
+                      className={selectedFirm?.id === firm.id ? "selected" : ""}
+                      key={firm.id}
+                      onClick={() => openFirm(firm)}
+                      onKeyDown={(event) => {
+                        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault();
+                          openFirm(firm);
+                        }
+                      }}
+                      tabIndex={0}
+                    >
                       <td>
                         <strong>{firm.firmName || "-"}</strong>
                         <div className="small">{firm.attorney || "-"}</div>
                       </td>
+                      <td>{firm.title || "-"}</td>
                       <td>{formatPracticeArea(firm.practiceArea)}</td>
-                      <td>{[firm.city, firm.state].filter(Boolean).join(", ") || "-"}</td>
+                      <td>
+                        {firm.website ? (
+                          <a
+                            className="firm-site"
+                            href={firm.website}
+                            onClick={(event) => event.stopPropagation()}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Open
+                          </a>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td>
                         {firm.phone ? (
                           <button
                             className="firm-phone"
                             disabled={callingId === firm.id}
-                            onClick={() => callFirm(firm)}
+                            onClick={(event) => callFirm(event, firm)}
                             type="button"
                           >
                             {callingId === firm.id ? "Marking..." : formatPhone(firm.phone)}
@@ -833,19 +941,14 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
                         )}
                       </td>
                       <td>
-                        {firm.calledAt ? (
+                        {firm.assignedTo ? (
                           <>
-                            <strong>{caller?.name || "Rep"}</strong>
-                            <div className="small">{formatDateTime(firm.calledAt)}</div>
+                            <strong>{owner?.name || "Assigned"}</strong>
+                            <div className="small">{formatDateTime(firm.assignedAt)}</div>
                           </>
                         ) : (
-                          <span className="small">Available</span>
+                          <span className="small">{claimingId === firm.id ? "Claiming..." : "Unassigned"}</span>
                         )}
-                      </td>
-                      <td>
-                        <button className="row-action" onClick={() => setSelectedId(firm.id)} type="button">
-                          View
-                        </button>
                       </td>
                     </tr>
                   );
@@ -859,17 +962,28 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
       </section>
 
       {selectedFirm ? (
-        <aside className="firm-detail card">
+        <div
+          className="firm-modal-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedFirm(null);
+          }}
+        >
+        <aside aria-modal="true" className="firm-detail card" role="dialog">
           <div className="crm-detail-head">
             <div>
               <h3>{selectedFirm.firmName}</h3>
               <span className="small">{selectedFirm.attorney || "No contact listed"}</span>
             </div>
-            <button aria-label="Close firm detail" className="row-action" onClick={() => setSelectedId("")} type="button">
+            <button aria-label="Close firm detail" className="row-action" onClick={() => setSelectedFirm(null)} type="button">
               Close
             </button>
           </div>
           <div className="firm-detail-grid">
+            <DetailItem label="Owner" value={state.reps.find((rep) => rep.id === selectedFirm.assignedTo)?.name || "Unassigned"} />
+            <DetailItem label="Assigned" value={formatDateTime(selectedFirm.assignedAt)} />
+            <DetailItem label="Attorney" value={selectedFirm.attorney || "-"} />
+            <DetailItem label="First name" value={selectedFirm.firstName || "-"} />
+            <DetailItem label="Last name" value={selectedFirm.lastName || "-"} />
             <DetailItem label="Practice" value={formatPracticeArea(selectedFirm.practiceArea)} />
             <DetailItem label="Role" value={selectedFirm.title || "-"} />
             <DetailItem label="Phone" value={formatPhone(selectedFirm.phone)} />
@@ -885,6 +999,8 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
             <DetailItem label="Free email" value={selectedFirm.freeEmail ? "Yes" : "No"} />
             <DetailItem label="Email domain" value={selectedFirm.emailDomain || "-"} />
             <DetailItem label="Calls" value={`${selectedFirm.callCount || 0}`} />
+            <DetailItem label="Last called" value={formatDateTime(selectedFirm.calledAt)} />
+            <DetailItem label="Last caller" value={state.reps.find((rep) => rep.id === selectedFirm.calledBy)?.name || "-"} />
           </div>
           <div className="firm-links">
             {selectedFirm.website ? (
@@ -916,6 +1032,7 @@ function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice,
             </div>
           ) : null}
         </aside>
+        </div>
       ) : null}
     </div>
   );
@@ -4689,6 +4806,8 @@ function mapFirmRow(row) {
     freeEmail: Boolean(row.free_email),
     laneTarget: row.lane_target || "",
     emailValid: Boolean(row.email_is_valid),
+    assignedTo: row.assigned_to || null,
+    assignedAt: row.assigned_at || "",
     calledBy: row.called_by || null,
     calledAt: row.called_at || "",
     callCount: Number(row.call_count || 0)
