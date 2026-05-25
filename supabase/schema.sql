@@ -195,8 +195,6 @@ begin
 
   update public.firms
   set
-    assigned_to = coalesce(assigned_to, auth.uid()),
-    assigned_at = case when assigned_to is null then now() else assigned_at end,
     called_by = auth.uid(),
     called_at = now(),
     call_count = call_count + 1

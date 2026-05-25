@@ -2393,6 +2393,39 @@ a:focus-visible {
   min-height: 43px;
 }
 
+.firm-owner-legend {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 13px;
+}
+
+.firm-owner-legend span,
+.firm-owner,
+.firm-modal-owner {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.firm-owner-dot {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 10px;
+  height: 10px;
+  width: 10px;
+}
+
+.firm-owner-dot.filled {
+  background: var(--rep-color);
+  border-color: var(--rep-color);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rep-color) 45%, transparent);
+}
+
 .firms-ledger,
 .firms-table-wrap {
   max-width: 100%;
@@ -2469,6 +2502,30 @@ a:focus-visible {
   opacity: 0.65;
 }
 
+.firm-claim {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.firm-claim:hover {
+  color: var(--ink);
+}
+
+.firm-claim:hover .firm-owner-dot {
+  border-color: var(--ink);
+}
+
+.firm-claim:disabled {
+  opacity: 0.55;
+}
+
 .firm-detail {
   display: grid;
   gap: 15px;
@@ -2501,6 +2558,10 @@ a:focus-visible {
 .firm-detail-grid .detail-item strong {
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+
+.firm-detail-grid .firm-modal-owner {
+  display: inline-flex;
 }
 
 .firm-links {

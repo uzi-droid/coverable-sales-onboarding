@@ -361,8 +361,6 @@ export default function SalesCommandApp() {
           firm.id === firmId
             ? {
                 ...firm,
-                assignedTo: firm.assignedTo || repId,
-                assignedAt: firm.assignedAt || calledAt,
                 calledBy: repId,
                 calledAt,
                 callCount: Number(firm.callCount || 0) + 1
@@ -763,9 +761,13 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
     setter(value);
   }
 
-  async function openFirm(firm) {
+  function openFirm(firm) {
     setSelectedFirm(firm);
-    if (firm.assignedTo && firm.assignedTo !== currentRep.id) return;
+  }
+
+  async function assignFirm(event, firm) {
+    event.stopPropagation();
+    if (firm.assignedTo) return;
     setClaimingId(firm.id);
     const ownerId = await claimFirm(firm.id);
     if (ownerId) {
@@ -775,7 +777,7 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
         assignedTo: ownerId,
         assignedAt: firm.assignedAt || new Date().toISOString()
       };
-      setSelectedFirm(claimedFirm);
+      setSelectedFirm((current) => (current?.id === firm.id ? claimedFirm : current));
       if (!firm.assignedTo) {
         setNotice(`${firm.firmName || "Firm"} assigned to ${owner?.name || currentRep.name}.`);
         if (status === "Unassigned") {
@@ -870,6 +872,15 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
         </button>
       </form>
 
+      <div className="firm-owner-legend" aria-label="Rep ownership colors">
+        {state.reps.map((rep) => (
+          <span key={rep.id}>
+            <i className="firm-owner-dot filled" style={{ "--rep-color": repColor(rep.id, state.reps) }} />
+            {rep.name}
+          </span>
+        ))}
+      </div>
+
       <section className="firms-ledger">
         {loadingFirms ? (
           <div className="inline-loading">
@@ -942,12 +953,24 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
                       </td>
                       <td>
                         {firm.assignedTo ? (
-                          <>
-                            <strong>{owner?.name || "Assigned"}</strong>
-                            <div className="small">{formatDateTime(firm.assignedAt)}</div>
-                          </>
+                          <div className="firm-owner">
+                            <i className="firm-owner-dot filled" style={{ "--rep-color": repColor(firm.assignedTo, state.reps) }} />
+                            <div>
+                              <strong>{owner?.name || "Assigned"}</strong>
+                              <div className="small">{formatDateTime(firm.assignedAt)}</div>
+                            </div>
+                          </div>
                         ) : (
-                          <span className="small">{claimingId === firm.id ? "Claiming..." : "Unassigned"}</span>
+                          <button
+                            aria-label={`Assign ${firm.firmName || "firm"} to me`}
+                            className="firm-claim"
+                            disabled={claimingId === firm.id}
+                            onClick={(event) => assignFirm(event, firm)}
+                            type="button"
+                          >
+                            <i className="firm-owner-dot" />
+                            {claimingId === firm.id ? "Assigning..." : "Assign to me"}
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -979,7 +1002,17 @@ function FirmsView({ claimFirm, configured, currentRep, recordFirmCall, session,
             </button>
           </div>
           <div className="firm-detail-grid">
-            <DetailItem label="Owner" value={state.reps.find((rep) => rep.id === selectedFirm.assignedTo)?.name || "Unassigned"} />
+            <div className="detail-item">
+              <span>Owner</span>
+              <strong className="firm-modal-owner">
+                {selectedFirm.assignedTo ? (
+                  <i className="firm-owner-dot filled" style={{ "--rep-color": repColor(selectedFirm.assignedTo, state.reps) }} />
+                ) : (
+                  <i className="firm-owner-dot" />
+                )}
+                {state.reps.find((rep) => rep.id === selectedFirm.assignedTo)?.name || "Unassigned"}
+              </strong>
+            </div>
             <DetailItem label="Assigned" value={formatDateTime(selectedFirm.assignedAt)} />
             <DetailItem label="Attorney" value={selectedFirm.attorney || "-"} />
             <DetailItem label="First name" value={selectedFirm.firstName || "-"} />
@@ -4778,6 +4811,12 @@ function formatPracticeArea(value) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function repColor(repId, reps) {
+  const colors = ["#46c9a8", "#5b8def", "#f2ae43", "#e46d8b", "#a887ff", "#35b7cf", "#f07b52", "#93c857"];
+  const index = Math.max(0, reps.findIndex((rep) => rep.id === repId));
+  return colors[index % colors.length];
 }
 
 function mapFirmRow(row) {
