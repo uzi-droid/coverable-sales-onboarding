@@ -349,6 +349,42 @@ export default function SalesCommandApp() {
     return true;
   }
 
+  async function recordFirmCall(firmId) {
+    const repId = currentRep?.id;
+    if (!repId) return false;
+
+    if (!configured || !session) {
+      const calledAt = new Date().toISOString();
+      updateState((draft) => ({
+        ...draft,
+        firms: (draft.firms || []).map((firm) =>
+          firm.id === firmId
+            ? {
+                ...firm,
+                calledBy: repId,
+                calledAt,
+                callCount: Number(firm.callCount || 0) + 1
+              }
+            : firm
+        )
+      }));
+      return true;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.rpc("mark_firm_called", { p_firm_id: firmId });
+    if (error) {
+      setNotice(
+        isMissingFirmsSetup(error)
+          ? "Firms calling is not enabled yet. Run supabase/firms.sql in Supabase and import the supplied CSV."
+          : `Call was not marked: ${error.message}`
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   async function saveProgress(moduleId, amount) {
     const repId = currentRep?.id;
     if (!repId) return;
@@ -437,6 +473,7 @@ export default function SalesCommandApp() {
         <nav className="nav">
           {[
             ["team", "Team"],
+            ["firms", "Firms"],
             ["crm", "CRM"],
             ["script", "Script"],
             ["course", "Course"],
@@ -489,6 +526,16 @@ export default function SalesCommandApp() {
         ) : null}
         {activeView === "crm" ? (
           <CrmView state={state} currentRep={currentRep} saveCrmEntry={saveCrmEntry} />
+        ) : null}
+        {activeView === "firms" ? (
+          <FirmsView
+            configured={configured}
+            currentRep={currentRep}
+            recordFirmCall={recordFirmCall}
+            session={session}
+            setNotice={setNotice}
+            state={state}
+          />
         ) : null}
         {activeView === "script" ? (
           <ScriptView currentRep={currentRep} recordScriptCall={recordScriptCall} />
@@ -569,6 +616,308 @@ function TeamView({ state, rankedReps, currentStats, setActiveView }) {
 
       <TeamResults state={state} entries={state.crm} />
     </>
+  );
+}
+
+function FirmsView({ configured, currentRep, recordFirmCall, session, setNotice, state }) {
+  const pageSize = 50;
+  const [firms, setFirms] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [practiceArea, setPracticeArea] = useState("All");
+  const [status, setStatus] = useState("Available");
+  const [selectedId, setSelectedId] = useState("");
+  const [loadingFirms, setLoadingFirms] = useState(false);
+  const [callingId, setCallingId] = useState("");
+  const liveMode = configured && Boolean(session);
+  const selectedFirm = firms.find((firm) => firm.id === selectedId);
+
+  async function loadFirms() {
+    setLoadingFirms(true);
+    if (!liveMode) {
+      const query = search.toLowerCase();
+      const filtered = (state.firms || []).filter((firm) => {
+        const matchesPractice = practiceArea === "All" || firm.practiceArea === practiceArea;
+        const matchesStatus =
+          status === "All" ||
+          (status === "Available" && !firm.calledAt) ||
+          (status === "Called" && Boolean(firm.calledAt)) ||
+          (status === "Mine" && firm.calledBy === currentRep.id);
+        const matchesSearch =
+          !query ||
+          [firm.firmName, firm.attorney, firm.phone, firm.email, firm.city, firm.state]
+            .join(" ")
+            .toLowerCase()
+            .includes(query);
+        return matchesPractice && matchesStatus && matchesSearch;
+      });
+      setTotal(filtered.length);
+      setFirms(filtered.slice(page * pageSize, page * pageSize + pageSize));
+      setLoadingFirms(false);
+      return;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    let request = supabase
+      .from("firms")
+      .select(
+        "id, lead_attorney_full_name, first_name, last_name, firm_name, practice_area, website, firm_phone, attorney_email, linkedin_url, title, address, city, state, zip, source_url, confidence_score, notes, data_sources, outreach_tier, email_domain, free_email, lane_target, email_is_valid, called_by, called_at, call_count",
+        { count: "exact" }
+      )
+      .order("firm_name", { ascending: true });
+
+    if (practiceArea !== "All") request = request.eq("practice_area", practiceArea);
+    if (status === "Available") request = request.is("called_at", null);
+    if (status === "Called") request = request.not("called_at", "is", null);
+    if (status === "Mine") request = request.eq("called_by", currentRep.id);
+    if (search) {
+      const term = search.replace(/[,%()]/g, " ").trim();
+      if (term) {
+        request = request.or(
+          `firm_name.ilike.%${term}%,lead_attorney_full_name.ilike.%${term}%,attorney_email.ilike.%${term}%,city.ilike.%${term}%,state.ilike.%${term}%`
+        );
+      }
+    }
+
+    const { data, error, count } = await request.range(page * pageSize, page * pageSize + pageSize - 1);
+    if (error) {
+      setFirms([]);
+      setTotal(0);
+      setNotice(
+        isMissingFirmsSetup(error)
+          ? "Firms is ready in the app. Run supabase/firms.sql and import the cleaned CSV to load your lead list."
+          : error.message
+      );
+    } else {
+      setFirms((data || []).map(mapFirmRow));
+      setTotal(count || 0);
+    }
+    setLoadingFirms(false);
+  }
+
+  useEffect(() => {
+    loadFirms();
+    // The loaded page intentionally refreshes whenever filters or demo call markings change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveMode, page, practiceArea, search, status, state.firms]);
+
+  function submitSearch(event) {
+    event.preventDefault();
+    setPage(0);
+    setSearch(searchInput.trim());
+  }
+
+  function chooseFilter(setter, value) {
+    setPage(0);
+    setter(value);
+  }
+
+  async function callFirm(firm) {
+    setCallingId(firm.id);
+    const saved = await recordFirmCall(firm.id);
+    if (saved) {
+      setNotice(`${firm.firmName || "Firm"} marked called by ${currentRep.name}.`);
+      await loadFirms();
+      setSelectedId(firm.id);
+      if (liveMode && firm.phone) window.location.href = `tel:${firm.phone}`;
+    }
+    setCallingId("");
+  }
+
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="firms-page">
+      <div className="firms-head">
+        <div>
+          <h2>Firms</h2>
+          <span className="small">
+            {total.toLocaleString()} {total === 1 ? "lead" : "leads"}
+          </span>
+        </div>
+        <div className="firms-paging">
+          <button className="ghost" disabled={page === 0} onClick={() => setPage((value) => value - 1)} type="button">
+            Previous
+          </button>
+          <span>
+            {page + 1} / {lastPage}
+          </span>
+          <button
+            className="ghost"
+            disabled={page + 1 >= lastPage}
+            onClick={() => setPage((value) => value + 1)}
+            type="button"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      <form className="firms-toolbar" onSubmit={submitSearch}>
+        <input
+          aria-label="Search firms"
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Search firm, attorney, city"
+          value={searchInput}
+        />
+        <select
+          aria-label="Filter practice area"
+          onChange={(event) => chooseFilter(setPracticeArea, event.target.value)}
+          value={practiceArea}
+        >
+          <option value="All">All practices</option>
+          <option value="criminal_defense">Criminal defense</option>
+          <option value="immigration">Immigration</option>
+          <option value="personal_injury">Personal injury</option>
+          <option value="estate_planning">Estate planning</option>
+          <option value="family_law">Family law</option>
+          <option value="insurance_defense">Insurance defense</option>
+          <option value="business_law">Business law</option>
+          <option value="other">Other</option>
+        </select>
+        <select aria-label="Filter call status" onChange={(event) => chooseFilter(setStatus, event.target.value)} value={status}>
+          <option>Available</option>
+          <option>Mine</option>
+          <option>Called</option>
+          <option>All</option>
+        </select>
+        <button className="button" type="submit">
+          Search
+        </button>
+      </form>
+
+      <section className="firms-ledger">
+        {loadingFirms ? (
+          <div className="inline-loading">
+            <div className="loading-bar" />
+            <span>Loading firms...</span>
+          </div>
+        ) : firms.length ? (
+          <div className="table-wrap firms-table-wrap">
+            <table className="firms-table">
+              <thead>
+                <tr>
+                  <th>Firm</th>
+                  <th>Practice</th>
+                  <th>Location</th>
+                  <th>Phone</th>
+                  <th>Last called by</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {firms.map((firm) => {
+                  const caller = state.reps.find((rep) => rep.id === firm.calledBy);
+                  return (
+                    <tr className={selectedId === firm.id ? "selected" : ""} key={firm.id}>
+                      <td>
+                        <strong>{firm.firmName || "-"}</strong>
+                        <div className="small">{firm.attorney || "-"}</div>
+                      </td>
+                      <td>{formatPracticeArea(firm.practiceArea)}</td>
+                      <td>{[firm.city, firm.state].filter(Boolean).join(", ") || "-"}</td>
+                      <td>
+                        {firm.phone ? (
+                          <button
+                            className="firm-phone"
+                            disabled={callingId === firm.id}
+                            onClick={() => callFirm(firm)}
+                            type="button"
+                          >
+                            {callingId === firm.id ? "Marking..." : formatPhone(firm.phone)}
+                          </button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td>
+                        {firm.calledAt ? (
+                          <>
+                            <strong>{caller?.name || "Rep"}</strong>
+                            <div className="small">{formatDateTime(firm.calledAt)}</div>
+                          </>
+                        ) : (
+                          <span className="small">Available</span>
+                        )}
+                      </td>
+                      <td>
+                        <button className="row-action" onClick={() => setSelectedId(firm.id)} type="button">
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty">No matching firms</div>
+        )}
+      </section>
+
+      {selectedFirm ? (
+        <aside className="firm-detail card">
+          <div className="crm-detail-head">
+            <div>
+              <h3>{selectedFirm.firmName}</h3>
+              <span className="small">{selectedFirm.attorney || "No contact listed"}</span>
+            </div>
+            <button aria-label="Close firm detail" className="row-action" onClick={() => setSelectedId("")} type="button">
+              Close
+            </button>
+          </div>
+          <div className="firm-detail-grid">
+            <DetailItem label="Practice" value={formatPracticeArea(selectedFirm.practiceArea)} />
+            <DetailItem label="Role" value={selectedFirm.title || "-"} />
+            <DetailItem label="Phone" value={formatPhone(selectedFirm.phone)} />
+            <DetailItem label="Email" value={selectedFirm.email || "-"} />
+            <DetailItem
+              label="Address"
+              value={[selectedFirm.address, selectedFirm.city, selectedFirm.state, selectedFirm.zip].filter(Boolean).join(", ") || "-"}
+            />
+            <DetailItem label="Tier" value={selectedFirm.outreachTier || "-"} />
+            <DetailItem label="Lane" value={selectedFirm.laneTarget || "-"} />
+            <DetailItem label="Confidence" value={selectedFirm.confidenceScore ? `${selectedFirm.confidenceScore}` : "-"} />
+            <DetailItem label="Email valid" value={selectedFirm.emailValid ? "Yes" : "No"} />
+            <DetailItem label="Free email" value={selectedFirm.freeEmail ? "Yes" : "No"} />
+            <DetailItem label="Email domain" value={selectedFirm.emailDomain || "-"} />
+            <DetailItem label="Calls" value={`${selectedFirm.callCount || 0}`} />
+          </div>
+          <div className="firm-links">
+            {selectedFirm.website ? (
+              <a className="row-action" href={selectedFirm.website} rel="noreferrer" target="_blank">
+                Website
+              </a>
+            ) : null}
+            {selectedFirm.linkedinUrl ? (
+              <a className="row-action" href={selectedFirm.linkedinUrl} rel="noreferrer" target="_blank">
+                LinkedIn
+              </a>
+            ) : null}
+            {selectedFirm.sourceUrl ? (
+              <a className="row-action" href={selectedFirm.sourceUrl} rel="noreferrer" target="_blank">
+                Source
+              </a>
+            ) : null}
+          </div>
+          {selectedFirm.notes ? (
+            <div className="crm-detail-note">
+              <span>Source notes</span>
+              <p>{selectedFirm.notes}</p>
+            </div>
+          ) : null}
+          {selectedFirm.dataSources ? (
+            <div className="crm-detail-note">
+              <span>Data sources</span>
+              <p>{selectedFirm.dataSources}</p>
+            </div>
+          ) : null}
+        </aside>
+      ) : null}
+    </div>
   );
 }
 
@@ -4288,6 +4637,64 @@ function formatShortDate(value) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 }
 
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function formatPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  const domestic = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (domestic.length !== 10) return value || "-";
+  return `(${domestic.slice(0, 3)}) ${domestic.slice(3, 6)}-${domestic.slice(6)}`;
+}
+
+function formatPracticeArea(value) {
+  if (!value) return "-";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function mapFirmRow(row) {
+  return {
+    id: row.id,
+    attorney: row.lead_attorney_full_name || "",
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    firmName: row.firm_name || "",
+    practiceArea: row.practice_area || "",
+    website: row.website || "",
+    phone: row.firm_phone || "",
+    email: row.attorney_email || "",
+    linkedinUrl: row.linkedin_url || "",
+    title: row.title || "",
+    address: row.address || "",
+    city: row.city || "",
+    state: row.state || "",
+    zip: row.zip || "",
+    sourceUrl: row.source_url || "",
+    confidenceScore: Number(row.confidence_score || 0),
+    notes: row.notes || "",
+    dataSources: row.data_sources || "",
+    outreachTier: row.outreach_tier || "",
+    emailDomain: row.email_domain || "",
+    freeEmail: Boolean(row.free_email),
+    laneTarget: row.lane_target || "",
+    emailValid: Boolean(row.email_is_valid),
+    calledBy: row.called_by || null,
+    calledAt: row.called_at || "",
+    callCount: Number(row.call_count || 0)
+  };
+}
+
 function profileFromUser(user) {
   const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "New Rep";
   return {
@@ -4341,6 +4748,17 @@ function isMissingScriptCallTable(error) {
 function isMissingScriptPathFields(error) {
   const message = error?.message || "";
   return Boolean(error) && (error?.code === "PGRST204" || message.includes("response_path") || message.includes("practice_area"));
+}
+
+function isMissingFirmsSetup(error) {
+  const message = error?.message || "";
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST202" ||
+    error?.code === "PGRST205" ||
+    message.includes("firms") ||
+    message.includes("mark_firm_called")
+  );
 }
 
 async function loadScriptCallMetrics(supabase) {

@@ -2339,6 +2339,140 @@ a:focus-visible {
   margin-top: 18px;
 }
 
+/* Firms calling queue */
+.firms-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.firms-head {
+  align-items: end;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.firms-head h2 {
+  font-size: 28px;
+  font-weight: 550;
+  margin: 0 0 5px;
+}
+
+.firms-paging {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.firms-paging .ghost {
+  min-height: 38px;
+  padding: 0 15px;
+}
+
+.firms-paging span {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 56px;
+  text-align: center;
+}
+
+.firms-paging button:disabled {
+  opacity: 0.35;
+}
+
+.firms-toolbar {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(190px, 1fr) 190px 132px 92px;
+}
+
+.firms-toolbar input,
+.firms-toolbar select,
+.firms-toolbar .button {
+  min-height: 43px;
+}
+
+.firms-ledger,
+.firms-table-wrap {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.firms-table {
+  min-width: 850px;
+}
+
+.firms-table td,
+.firms-table th {
+  padding: 11px 12px;
+}
+
+.firms-table td:first-child {
+  min-width: 245px;
+}
+
+.firms-table td:nth-child(2) {
+  min-width: 130px;
+}
+
+.firms-table td:nth-child(3) {
+  min-width: 125px;
+}
+
+.firms-table tr.selected td {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.firm-phone {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 13px;
+  min-height: 34px;
+  padding: 0 13px;
+  white-space: nowrap;
+}
+
+.firm-phone:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.firm-phone:disabled {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.firm-detail {
+  display: grid;
+  gap: 15px;
+  max-width: 820px;
+  padding: 18px;
+}
+
+.firm-detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.firm-detail-grid .detail-item strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.firm-links {
+  display: flex;
+  gap: 8px;
+}
+
+.firm-links .row-action {
+  align-items: center;
+  display: inline-flex;
+  text-decoration: none;
+}
+
 /* Admin analytics */
 .analytics {
   display: grid;
@@ -2547,6 +2681,27 @@ a:focus-visible {
   }
 
   .crm-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .firms-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .firms-paging {
+    justify-content: space-between;
+  }
+
+  .firms-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .firms-toolbar input {
+    grid-column: 1 / -1;
+  }
+
+  .firm-detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
