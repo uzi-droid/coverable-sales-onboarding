@@ -109,7 +109,7 @@ export default function SalesCommandApp() {
         { data: profiles, error: profileError },
         { data: progress, error: progressError },
         { data: crm, error: crmError },
-        { data: scriptCalls, error: scriptCallsError }
+        { data: scriptCalls, error: scriptCallsError, legacy: legacyScriptMetrics }
       ] = await withTimeout(
         Promise.all([
           supabase.from("profiles").select("id, full_name, email, role, start_date").order("created_at", { ascending: true }),
@@ -118,10 +118,7 @@ export default function SalesCommandApp() {
             .from("crm_activities")
             .select("*")
             .order("created_at", { ascending: false }),
-          supabase
-            .from("script_call_metrics")
-            .select("id, user_id, button_clicks, created_at")
-            .order("created_at", { ascending: false })
+          loadScriptCallMetrics(supabase)
         ]),
         "Workspace data took too long to load"
       );
@@ -134,6 +131,8 @@ export default function SalesCommandApp() {
       }
       if (scriptTableMissing) {
         setNotice("Script call tracking needs its Supabase setup script before calls can be counted.");
+      } else if (legacyScriptMetrics) {
+        setNotice("Run the updated Script metrics SQL in Supabase to begin response analytics.");
       }
 
       const reps = (profiles || []).map((profile) => ({
@@ -171,6 +170,8 @@ export default function SalesCommandApp() {
           id: row.id,
           repId: row.user_id,
           buttonClicks: Number(row.button_clicks || 0),
+          responses: Array.isArray(row.response_path) ? row.response_path : [],
+          practiceArea: row.practice_area || "immigration",
           createdAt: row.created_at?.slice(0, 10) || ""
         })),
         crm: (crm || []).map((row) => ({
@@ -294,7 +295,7 @@ export default function SalesCommandApp() {
     return true;
   }
 
-  async function recordScriptCall(buttonClicks) {
+  async function recordScriptCall(buttonClicks, responses) {
     const repId = currentRep?.id;
     if (!repId) return false;
 
@@ -302,6 +303,8 @@ export default function SalesCommandApp() {
       id: crypto.randomUUID(),
       repId,
       buttonClicks,
+      responses,
+      practiceArea: "immigration",
       createdAt: new Date().toISOString().slice(0, 10)
     };
 
@@ -311,10 +314,23 @@ export default function SalesCommandApp() {
     }
 
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.from("script_call_metrics").insert({
+    let { error } = await supabase.from("script_call_metrics").insert({
       user_id: session.user.id,
-      button_clicks: buttonClicks
+      button_clicks: buttonClicks,
+      response_path: responses,
+      practice_area: entry.practiceArea
     });
+
+    if (isMissingScriptPathFields(error)) {
+      const fallback = await supabase.from("script_call_metrics").insert({
+        user_id: session.user.id,
+        button_clicks: buttonClicks
+      });
+      error = fallback.error;
+      if (!error) {
+        setNotice("Call counted. Run the updated Script metrics SQL in Supabase to capture response analytics.");
+      }
+    }
 
     if (error) {
       setNotice(
@@ -736,6 +752,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [loggingCall, setLoggingCall] = useState(false);
   const [buttonClicks, setButtonClicks] = useState(0);
+  const [responsePath, setResponsePath] = useState([]);
   const topRef = useRef(null);
   const scriptTextRef = useRef(null);
   const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
@@ -758,10 +775,14 @@ function ScriptView({ currentRep, recordScriptCall }) {
     window.getSelection()?.removeAllRanges();
   }
 
-  function moveTo(nextStateId) {
+  function moveTo(button) {
     setHistory((path) => [...path, state.id]);
     setButtonClicks((count) => count + 1);
-    setStateId(nextStateId);
+    setResponsePath((path) => [
+      ...path,
+      { stateId: state.id, state: state.title, audience: state.audience, response: button.label }
+    ]);
+    setStateId(button.nextStateId);
     clearCopyState();
   }
 
@@ -769,6 +790,8 @@ function ScriptView({ currentRep, recordScriptCall }) {
     setHistory((path) => {
       if (!path.length) return path;
       setStateId(path[path.length - 1]);
+      setButtonClicks((count) => Math.max(0, count - 1));
+      setResponsePath((responses) => responses.slice(0, -1));
       return path.slice(0, -1);
     });
     clearCopyState();
@@ -777,10 +800,11 @@ function ScriptView({ currentRep, recordScriptCall }) {
   async function restart() {
     if (loggingCall) return;
     setLoggingCall(true);
-    await recordScriptCall(buttonClicks);
+    await recordScriptCall(buttonClicks, responsePath);
     setStateId(SCRIPT_START_STATE_ID);
     setHistory([]);
     setButtonClicks(0);
+    setResponsePath([]);
     clearCopyState();
     setLoggingCall(false);
   }
@@ -876,7 +900,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
                 className="response-button"
                 disabled={loggingCall}
                 key={button.label}
-                onClick={() => (button.nextStateId === SCRIPT_START_STATE_ID ? restart() : moveTo(button.nextStateId))}
+                onClick={() => (button.nextStateId === SCRIPT_START_STATE_ID ? restart() : moveTo(button))}
                 type="button"
               >
                 {button.label}
@@ -893,7 +917,9 @@ function AdminView({ refresh, session, state }) {
   const [formState, setFormState] = useState({ fullName: "", email: "", password: "" });
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
+  const [analyticsRepId, setAnalyticsRepId] = useState("all");
   const rankedReps = rankReps(state);
+  const analytics = buildAdminAnalytics(state, analyticsRepId);
 
   async function createAccount(event) {
     event.preventDefault();
@@ -928,6 +954,82 @@ function AdminView({ refresh, session, state }) {
 
   return (
     <div className="admin-page">
+      <section className="analytics">
+        <div className="analytics-header">
+          <h3>Analytics</h3>
+          <select
+            aria-label="Analyze team member"
+            onChange={(event) => setAnalyticsRepId(event.target.value)}
+            value={analyticsRepId}
+          >
+            <option value="all">Full team</option>
+            {state.reps.map((rep) => (
+              <option key={rep.id} value={rep.id}>
+                {rep.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="analytics-metrics">
+          <Metric label="Script calls" value={analytics.calls} />
+          <Metric label="Avg clicks" value={formatAverageClicks(analytics.averageClicks)} />
+          <Metric label="Demos" value={analytics.demos} />
+          <Metric label="Closed" value={analytics.closed} />
+          <Metric label="Revenue" value={formatMoney(analytics.revenue)} />
+          <Metric label="Demo / call" value={formatPercent(analytics.demoRate)} />
+        </div>
+
+        <div className="analytics-panels">
+          <article className="analytics-panel">
+            <div className="analytics-panel-head">
+              <h4>Common responses</h4>
+              <span>{analytics.responseCount ? `${analytics.responseCount} captured` : "New calls only"}</span>
+            </div>
+            {analytics.commonResponses.length ? (
+              <div className="response-ranking">
+                {analytics.commonResponses.map((response) => (
+                  <div className="response-rank-row" key={response.label}>
+                    <span>{response.label}</span>
+                    <div className="analytics-bar">
+                      <div style={{ width: `${response.share}%` }} />
+                    </div>
+                    <strong>{response.count}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="analytics-empty">Response trends appear after reps complete tracked Script calls.</div>
+            )}
+          </article>
+
+          <article className="analytics-panel">
+            <div className="analytics-panel-head">
+              <h4>Call shape</h4>
+              <span>Script behavior</span>
+            </div>
+            <div className="call-shape">
+              <AnalyticsValue label="Short calls (0-2 clicks)" value={analytics.shortCalls} />
+              <AnalyticsValue label="Developed calls (6+ clicks)" value={analytics.deepCalls} />
+              <AnalyticsValue label="Longest call" value={`${analytics.longestCall} clicks`} />
+              <AnalyticsValue label="Response coverage" value={formatPercent(analytics.responseCoverage)} />
+            </div>
+          </article>
+
+          <article className="analytics-panel">
+            <div className="analytics-panel-head">
+              <h4>Strategy signals</h4>
+              <span>{analytics.label}</span>
+            </div>
+            <div className="analytics-signals">
+              {analytics.signals.map((signal) => (
+                <p key={signal}>{signal}</p>
+              ))}
+            </div>
+          </article>
+        </div>
+      </section>
+
       <div className="admin-grid">
         <article className="card admin-create">
           <h3>New Rep</h3>
@@ -3934,6 +4036,15 @@ function DetailItem({ label, value }) {
   );
 }
 
+function AnalyticsValue({ label, value }) {
+  return (
+    <div className="analytics-value">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function Metric({ label, value }) {
   return (
     <article className="card metric">
@@ -4029,6 +4140,75 @@ function rankReps(state) {
     .sort((a, b) => b.closed - a.closed || b.demos - a.demos || b.calls - a.calls || b.onboarding - a.onboarding);
 }
 
+function buildAdminAnalytics(state, repId) {
+  const reps = repId === "all" ? state.reps : state.reps.filter((rep) => rep.id === repId);
+  const selectedIds = new Set(reps.map((rep) => rep.id));
+  const calls = (state.scriptCalls || []).filter((call) => selectedIds.has(call.repId));
+  const crm = state.crm.filter((entry) => selectedIds.has(entry.repId));
+  const clickTotal = calls.reduce((sum, call) => sum + call.buttonClicks, 0);
+  const responseMap = new Map();
+
+  calls.forEach((call) => {
+    (call.responses || []).forEach((response) => {
+      const label = response.response || "Unknown response";
+      responseMap.set(label, (responseMap.get(label) || 0) + 1);
+    });
+  });
+
+  const responseCount = Array.from(responseMap.values()).reduce((sum, count) => sum + count, 0);
+  const commonResponses = Array.from(responseMap, ([label, count]) => ({
+    label,
+    count,
+    share: responseCount ? Math.max(4, Math.round((count / responseCount) * 100)) : 0
+  }))
+    .sort((first, second) => second.count - first.count)
+    .slice(0, 6);
+  const demos = crm.filter((entry) => entry.outcome === "Demo Booked").length;
+  const closed = crm.filter((entry) => entry.outcome === "Closed").length;
+  const revenue = crm
+    .filter((entry) => entry.outcome === "Closed")
+    .reduce((sum, entry) => sum + Number(entry.saleAmount || 0), 0);
+  const mostCommon = commonResponses[0]?.label;
+  const signals = [];
+
+  if (!calls.length) {
+    signals.push("No tracked Script calls yet. Completed calls will begin forming a coaching baseline.");
+  } else {
+    signals.push(
+      `${calls.length} calls average ${formatAverageClicks(clickTotal / calls.length)} response clicks before restart.`
+    );
+    if (mostCommon) {
+      signals.push(`Most frequent response: "${mostCommon}". Review whether this branch earns a clear next step.`);
+    } else {
+      signals.push("Older counted calls do not yet contain response paths; new calls will reveal objection patterns.");
+    }
+    if (demos) {
+      signals.push(`${demos} demos are recorded in CRM versus ${calls.length} tracked Script calls for this view.`);
+    } else {
+      signals.push("No booked demos are recorded in CRM for this view yet; monitor which response branches precede bookings.");
+    }
+  }
+
+  return {
+    label: repId === "all" ? "Full team" : reps[0]?.name || "Member",
+    calls: calls.length,
+    averageClicks: calls.length ? clickTotal / calls.length : 0,
+    demos,
+    closed,
+    revenue,
+    demoRate: calls.length ? demos / calls.length : 0,
+    shortCalls: calls.filter((call) => call.buttonClicks <= 2).length,
+    deepCalls: calls.filter((call) => call.buttonClicks >= 6).length,
+    longestCall: calls.reduce((max, call) => Math.max(max, call.buttonClicks), 0),
+    responseCoverage: calls.length
+      ? calls.filter((call) => (call.responses || []).length > 0).length / calls.length
+      : 0,
+    responseCount,
+    commonResponses,
+    signals
+  };
+}
+
 function initialsFor(value) {
   return value
     .split(/[\s@.]+/)
@@ -4048,6 +4228,10 @@ function formatMoney(value) {
 
 function formatAverageClicks(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function formatPercent(value) {
+  return new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 }).format(value || 0);
 }
 
 function formatShortDate(value) {
@@ -4104,6 +4288,27 @@ function isMissingCrmSalesFields(error) {
 function isMissingScriptCallTable(error) {
   const message = error?.message || "";
   return error?.code === "42P01" || error?.code === "PGRST205" || message.includes("script_call_metrics");
+}
+
+function isMissingScriptPathFields(error) {
+  const message = error?.message || "";
+  return Boolean(error) && (error?.code === "PGRST204" || message.includes("response_path") || message.includes("practice_area"));
+}
+
+async function loadScriptCallMetrics(supabase) {
+  const result = await supabase
+    .from("script_call_metrics")
+    .select("id, user_id, button_clicks, response_path, practice_area, created_at")
+    .order("created_at", { ascending: false });
+
+  if (!isMissingScriptPathFields(result.error)) return result;
+
+  const fallback = await supabase
+    .from("script_call_metrics")
+    .select("id, user_id, button_clicks, created_at")
+    .order("created_at", { ascending: false });
+
+  return { ...fallback, legacy: !fallback.error };
 }
 
 function nextCourseTask(state, currentStats) {
