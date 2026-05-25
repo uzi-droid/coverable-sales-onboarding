@@ -2583,6 +2583,31 @@ a:focus-visible {
   min-width: 0;
 }
 
+.script-practice-switch {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  width: max-content;
+}
+
+.script-practice-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 14px;
+  min-height: 38px;
+  padding: 0 16px;
+}
+
+.script-practice-switch button.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
 .script-header {
   align-items: end;
   display: flex;

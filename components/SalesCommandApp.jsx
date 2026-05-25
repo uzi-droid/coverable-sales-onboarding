@@ -3,6 +3,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { bootcampDays, initialState } from "@/lib/demoData";
 import { immigrationScriptStates, SCRIPT_START_STATE_ID } from "@/lib/immigrationScriptFlow";
+import {
+  criminalDefenseScriptStates,
+  CRIMINAL_DEFENSE_SCRIPT_START_STATE_ID
+} from "@/lib/criminalDefenseScriptFlow";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "coverable-sales-command-next-v1";
@@ -295,7 +299,7 @@ export default function SalesCommandApp() {
     return true;
   }
 
-  async function recordScriptCall(buttonClicks, responses) {
+  async function recordScriptCall(buttonClicks, responses, practiceArea = "immigration") {
     const repId = currentRep?.id;
     if (!repId) return false;
 
@@ -304,7 +308,7 @@ export default function SalesCommandApp() {
       repId,
       buttonClicks,
       responses,
-      practiceArea: "immigration",
+      practiceArea,
       createdAt: new Date().toISOString().slice(0, 10)
     };
 
@@ -745,6 +749,17 @@ function CrmView({ state, currentRep, saveCrmEntry }) {
 }
 
 function ScriptView({ currentRep, recordScriptCall }) {
+  const [practiceArea, setPracticeArea] = useState("immigration");
+  const scriptDefinition =
+    practiceArea === "criminal-defense"
+      ? {
+          states: criminalDefenseScriptStates,
+          startStateId: CRIMINAL_DEFENSE_SCRIPT_START_STATE_ID
+        }
+      : {
+          states: immigrationScriptStates,
+          startStateId: SCRIPT_START_STATE_ID
+        };
   const [stateId, setStateId] = useState(SCRIPT_START_STATE_ID);
   const [history, setHistory] = useState([]);
   const [repName, setRepName] = useState(currentRep?.name || "");
@@ -755,7 +770,7 @@ function ScriptView({ currentRep, recordScriptCall }) {
   const [responsePath, setResponsePath] = useState([]);
   const topRef = useRef(null);
   const scriptTextRef = useRef(null);
-  const state = immigrationScriptStates[stateId] || immigrationScriptStates[SCRIPT_START_STATE_ID];
+  const state = scriptDefinition.states[stateId] || scriptDefinition.states[scriptDefinition.startStateId];
   const script = state.script
     .split("[REP NAME]")
     .join(repName.trim() || "[REP NAME]")
@@ -773,6 +788,18 @@ function ScriptView({ currentRep, recordScriptCall }) {
   function clearCopyState() {
     setCopyStatus("");
     window.getSelection()?.removeAllRanges();
+  }
+
+  function selectPracticeArea(nextPracticeArea) {
+    if (nextPracticeArea === practiceArea) return;
+    const nextStartStateId =
+      nextPracticeArea === "criminal-defense" ? CRIMINAL_DEFENSE_SCRIPT_START_STATE_ID : SCRIPT_START_STATE_ID;
+    setPracticeArea(nextPracticeArea);
+    setStateId(nextStartStateId);
+    setHistory([]);
+    setButtonClicks(0);
+    setResponsePath([]);
+    clearCopyState();
   }
 
   function moveTo(button) {
@@ -800,8 +827,8 @@ function ScriptView({ currentRep, recordScriptCall }) {
   async function restart() {
     if (loggingCall) return;
     setLoggingCall(true);
-    await recordScriptCall(buttonClicks, responsePath);
-    setStateId(SCRIPT_START_STATE_ID);
+    await recordScriptCall(buttonClicks, responsePath, practiceArea);
+    setStateId(scriptDefinition.startStateId);
     setHistory([]);
     setButtonClicks(0);
     setResponsePath([]);
@@ -847,6 +874,22 @@ function ScriptView({ currentRep, recordScriptCall }) {
 
   return (
     <div className="script-page" ref={topRef}>
+      <div className="script-practice-switch" aria-label="Practice area">
+        {[
+          ["immigration", "Immigration"],
+          ["criminal-defense", "Criminal Defense"]
+        ].map(([id, label]) => (
+          <button
+            aria-pressed={practiceArea === id}
+            className={practiceArea === id ? "active" : ""}
+            key={id}
+            onClick={() => selectPracticeArea(id)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <header className="script-header">
         <div>
           <span className="script-state-label">Current state</span>
@@ -900,7 +943,12 @@ function ScriptView({ currentRep, recordScriptCall }) {
                 className="response-button"
                 disabled={loggingCall}
                 key={button.label}
-                onClick={() => (button.nextStateId === SCRIPT_START_STATE_ID ? restart() : moveTo(button))}
+                onClick={() =>
+                  button.nextStateId === scriptDefinition.startStateId &&
+                  (/^Start (next|new)/i.test(button.label) || /^Restart/i.test(button.label))
+                    ? restart()
+                    : moveTo(button)
+                }
                 type="button"
               >
                 {button.label}
